@@ -1,0 +1,636 @@
+// ============================================================================
+//  Personal Career Platform — schéma Prisma
+//  PostgreSQL (Neon) + pgvector
+//
+//  Principe de modélisation directeur :
+//  ------------------------------------
+//  CONTACT est le pivot du modèle relationnel. Une personne extérieure existe
+//  une seule fois (identifiée par son email), et tout ce qu'elle génère s'y
+//  rattache : opportunité commerciale (Lead), fil de discussion (Conversation),
+//  rendez-vous (Appointment).
+//
+//  C'est la décision de modélisation à défendre en soutenance : la plupart des
+//  candidats vont dupliquer nom/email dans leads, messages et appointments, ce
+//  qui rend impossible la question « montre-moi tout l'historique de cette
+//  personne » — la question que pose n'importe quel CRM réel.
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ============================================================================
+//  ENUMS
+// ============================================================================
+
+enum Role {
+  ADMIN
+  VIEWER // prévu pour un futur accès en lecture seule ; l'application n'en crée aucun
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  PENDING   // demandé par le visiteur, en attente de décision
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  DISCUSSION
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum LeadSource {
+  CONTACT_FORM
+  BOOKING
+  CHATBOT
+  DIRECT
+}
+
+enum MessageDirection {
+  INBOUND  // visiteur -> admin
+  OUTBOUND // admin -> visiteur
+}
+
+enum ConversationStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+enum NotificationType {
+  NEW_MESSAGE
+  NEW_LEAD
+  NEW_APPOINTMENT
+  APPOINTMENT_CANCELLED
+}
+
+enum CalendarEventKind {
+  APPOINTMENT // miroir d'un Appointment confirmé
+  BLOCK       // indisponibilité posée manuellement depuis l'admin
+  EXTERNAL    // importé d'un calendrier tiers (bonus non livré)
+}
+
+enum KnowledgeSourceType {
+  PROFILE
+  PROJECT
+  EXPERIENCE
+  SKILL
+  ARTICLE
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+// ============================================================================
+//  AUTHENTIFICATION & RBAC
+//  Un seul utilisateur réel. Aucune route d'inscription n'est exposée :
+//  le compte admin est créé par prisma/seed.ts.
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String // Argon2id — jamais le mot de passe, jamais un hash rapide
+  name         String
+  role         Role     @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions  Session[]
+  leadNotes LeadNote[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  // SHA-256 du token de session, PAS le token lui-même.
+  // Le token brut n'existe que dans le cookie __Host- du navigateur.
+  // Conséquence : une fuite de la base ne donne aucune session exploitable.
+  tokenHash String   @unique
+  expiresAt DateTime
+  ipHash    String? // haché, jamais l'IP en clair (cf. SECURITY.md)
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt]) // balayage périodique des sessions expirées
+  @@map("sessions")
+}
+
+// ============================================================================
+//  CMS — CONTENU DU PORTFOLIO
+// ============================================================================
+
+/// Singleton : une seule ligne, id figé à "profile".
+/// Modélisé en table plutôt qu'en fichier de config pour rester éditable
+/// depuis /admin sans redéploiement — c'est l'exigence « sans jamais
+/// toucher au code » du sujet.
+model Profile {
+  id           String   @id @default("profile")
+  fullName     String
+  headline     String // la déclaration d'ouverture du portfolio
+  bio          String   @db.Text
+  location     String
+  timezone     String   @default("Africa/Lagos")
+  email        String
+  availability String // texte libre, affiché en métadonnée vivante en page d'accueil
+  openToWork   Boolean  @default(true)
+  socials      Json // { github, linkedin, x, facebook }
+  avatarId     String?
+  resumeUrl    String?
+  updatedAt    DateTime @updatedAt
+
+  avatar Media? @relation("ProfileAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
+
+  @@map("profile")
+}
+
+model Project {
+  id         String        @id @default(cuid())
+  slug       String        @unique
+  title      String
+  summary    String // 1 à 2 phrases — sert aussi de chunk RAG
+  content    String        @db.Text // markdown, rendu côté serveur puis assaini
+  role       String // « Développeur full-stack », « Architecte »…
+  domain     String // « Fintech », « Cybersécurité », « Immobilier » — filtre de l'index
+  year       Int
+  stack      String[] // tableau natif PostgreSQL, pas une table de jointure :
+  //            la stack n'est jamais requêtée seule, une table
+  //            aurait ajouté un JOIN pour zéro bénéfice
+  outcomes   String[] // résultats mesurables, alimentent le RAG
+  links      Json // { live, repo, caseStudy }
+  status     ContentStatus @default(DRAFT)
+  featured   Boolean       @default(false)
+  order      Int           @default(0)
+  coverId    String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  publishedAt DateTime?
+
+  cover Media? @relation("ProjectCover", fields: [coverId], references: [id], onDelete: SetNull)
+
+  // Index composite : la requête publique est TOUJOURS
+  // WHERE status = 'PUBLISHED' ORDER BY featured DESC, order ASC
+  @@index([status, featured, order])
+  @@index([domain])
+  @@map("projects")
+}
+
+model Experience {
+  id         String        @id @default(cuid())
+  org        String
+  role       String
+  location   String?
+  startDate  DateTime
+  endDate    DateTime? // null = poste en cours
+  current    Boolean       @default(false)
+  summary    String        @db.Text
+  highlights String[]
+  status     ContentStatus @default(PUBLISHED)
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([status, startDate(sort: Desc)])
+  @@map("experiences")
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  name      String
+  category  String // « Backend », « Sécurité », « Design »…
+  level     Int      @default(3) // 1-5, JAMAIS rendu en barre de progression (cf. design system)
+  context   String? // « utilisé sur ColocBenin et GMP » — c'est ce champ qui donne
+  //          de la valeur au RAG, pas le niveau chiffré
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, category])
+  @@index([category, order])
+  @@map("skills")
+}
+
+model Article {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  title          String
+  excerpt        String
+  content        String        @db.Text
+  tags           String[]
+  status         ContentStatus @default(DRAFT)
+  readingMinutes Int           @default(1)
+  coverId        String?
+  publishedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  cover Media? @relation("ArticleCover", fields: [coverId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("articles")
+}
+
+model Media {
+  id         String   @id @default(cuid())
+  url        String // URL Vercel Blob
+  pathname   String   @unique
+  mime       String // détecté par magic bytes, pas par l'extension déclarée
+  bytes      Int
+  width      Int?
+  height     Int?
+  alt        String   @default("") // obligatoire à la saisie admin (accessibilité)
+  blurDataUrl String? @db.Text // LQIP base64 généré par Sharp → placeholder next/image
+  // SHA-256 du binaire : déduplication des uploads et traçabilité
+  checksum   String   @unique
+  createdAt  DateTime @default(now())
+
+  profileAvatars Profile[] @relation("ProfileAvatar")
+  projectCovers  Project[] @relation("ProjectCover")
+  articleCovers  Article[] @relation("ArticleCover")
+
+  @@index([createdAt(sort: Desc)])
+  @@map("media")
+}
+
+// ============================================================================
+//  CONTACT — le pivot
+// ============================================================================
+
+model Contact {
+  id          String     @id @default(cuid())
+  email       String     @unique // clé naturelle : une personne = un email
+  name        String
+  company     String?
+  phone       String?
+  firstSource LeadSource @default(CONTACT_FORM)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  leads         Lead[]
+  conversations Conversation[]
+  appointments  Appointment[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("contacts")
+}
+
+// ============================================================================
+//  MINI-CRM
+// ============================================================================
+
+model Lead {
+  id             String     @id @default(cuid())
+  contactId      String
+  stage          LeadStage  @default(NEW)
+  source         LeadSource
+  intent         String     @db.Text // ce que la personne veut, dans ses mots
+  valueEstimate  Int? // en centimes, entier — jamais de Float pour de l'argent
+  currency       String     @default("XOF")
+  position       Int        @default(0) // ordre dans la colonne du pipeline (drag & drop)
+  lastActivityAt DateTime   @default(now())
+  closedAt       DateTime?
+  lostReason     String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  contact Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  notes   LeadNote[]
+  events  LeadEvent[]
+
+  // Requête du board CRM : WHERE stage = ? ORDER BY position
+  @@index([stage, position])
+  @@index([lastActivityAt(sort: Desc)])
+  @@map("leads")
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@map("lead_notes")
+}
+
+/// Journal d'audit immuable du pipeline. Aucune mise à jour, aucune suppression :
+/// on n'écrit que des lignes. C'est ce qui permet de répondre à
+/// « quand ce lead est-il passé en PROPOSAL, et par quel chemin ? ».
+/// Écrit dans la MÊME transaction Prisma que le changement de stage —
+/// un événement d'audit qui peut diverger de l'état n'a aucune valeur.
+model LeadEvent {
+  id        String     @id @default(cuid())
+  leadId    String
+  type      String // "STAGE_CHANGED" | "NOTE_ADDED" | "APPOINTMENT_BOOKED"…
+  fromStage LeadStage?
+  toStage   LeadStage?
+  payload   Json?
+  createdAt DateTime   @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@map("lead_events")
+}
+
+// ============================================================================
+//  MESSAGERIE
+// ============================================================================
+
+model Conversation {
+  id            String             @id @default(cuid())
+  contactId     String
+  subject       String
+  status        ConversationStatus @default(OPEN)
+  lastMessageAt DateTime           @default(now())
+  // Compteur dénormalisé : la liste des conversations de l'admin doit afficher
+  // le nombre de non-lus sans lancer un COUNT par ligne. Maintenu dans la même
+  // transaction que l'insertion du message.
+  unreadCount   Int                @default(0)
+  createdAt     DateTime           @default(now())
+
+  contact  Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([status, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  body           String           @db.Text // stocké brut, ÉCHAPPÉ au rendu — jamais de HTML
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  type       NotificationType
+  title      String
+  body       String
+  entityType String // "conversation" | "lead" | "appointment"
+  entityId   String // lien profond vers la ressource depuis le dashboard
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  // Index partiel utile : la cloche du dashboard ne lit que les non-lues
+  @@index([readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ============================================================================
+//  RÉSERVATION
+// ============================================================================
+
+model Service {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String
+  durationMin Int // durée du créneau
+  bufferMin   Int      @default(15) // marge après le rendez-vous, incluse dans le calcul
+  active      Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@index([active, order])
+  @@map("services")
+}
+
+/// Disponibilité récurrente hebdomadaire.
+/// Les heures sont stockées en MINUTES DEPUIS MINUIT (entier), pas en DateTime :
+/// une règle récurrente n'a pas de date, et un entier élimine tous les pièges
+/// de fuseau horaire et d'heure d'été sur une valeur qui n'est pas un instant.
+model AvailabilityRule {
+  id          String   @id @default(cuid())
+  weekday     Int // 0 = dimanche … 6 = samedi
+  startMinute Int // 540 = 09:00
+  endMinute   Int // 1020 = 17:00
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([weekday, startMinute, endMinute])
+  @@index([weekday, active])
+  @@map("availability_rules")
+}
+
+/// Exception à la règle récurrente : blocage d'une journée entière
+/// (startMinute/endMinute à null) ou d'une plage précise.
+model AvailabilityException {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  startMinute Int?
+  endMinute   Int?
+  blocked     Boolean  @default(true) // false = ouverture exceptionnelle hors règle
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+  @@map("availability_exceptions")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  serviceId   String
+  contactId   String
+  // ---------------------------------------------------------------------
+  //  @@unique([startsAt]) — LA contrainte qui garantit l'absence de double
+  //  réservation. Le verrou Redis évite d'atteindre la base dans le cas
+  //  courant ; CETTE ligne est la garantie de correction. Une erreur P2002
+  //  est rattrapée dans la route handler et renvoyée en HTTP 409.
+  //  Un invariant métier ne repose jamais sur un cache.
+  // ---------------------------------------------------------------------
+  startsAt    DateTime
+  endsAt      DateTime
+  status      AppointmentStatus @default(PENDING)
+  guestNote   String?           @db.Text
+  // Token opaque envoyé au visiteur : lui seul permet d'annuler, sans compte.
+  cancelToken String            @unique @default(cuid())
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  service       Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  contact       Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  calendarEvent CalendarEvent?
+
+  @@unique([startsAt])
+  @@index([status, startsAt])
+  @@index([startsAt])
+  @@map("appointments")
+}
+
+/// Vue unifiée de l'agenda : un rendez-vous confirmé et un blocage manuel
+/// sont deux choses différentes en base mais une seule chose à l'écran.
+/// Ce modèle est la couche de présentation du calendrier.
+model CalendarEvent {
+  id            String            @id @default(cuid())
+  kind          CalendarEventKind
+  title         String
+  startsAt      DateTime
+  endsAt        DateTime
+  appointmentId String?           @unique
+  createdAt     DateTime          @default(now())
+
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([startsAt, endsAt])
+  @@map("calendar_events")
+}
+
+// ============================================================================
+//  RAG — BASE DE CONNAISSANCES
+// ============================================================================
+
+/// Chunk sémantique de la base de connaissances.
+///
+/// Prisma ne connaît pas nativement le type `vector` : on le déclare en
+/// Unsupported(), ce qui le rend invisible au client généré. Les écritures et
+/// les lectures de ce champ passent donc par $queryRaw avec un cast ::vector.
+/// C'est assumé et documenté — c'est le prix du pgvector avec Prisma.
+///
+/// Les deux colonnes ci-dessous et leurs index sont créés dans une migration
+/// SQL manuelle (cf. bas de fichier).
+model KnowledgeChunk {
+  id          String              @id @default(cuid())
+  sourceType  KnowledgeSourceType
+  sourceId    String // id de l'entité d'origine -> permet la citation en réponse
+  title       String // affiché comme source cliquable dans l'UI du chat
+  content     String              @db.Text
+  tokenCount  Int                 @default(0)
+  // SHA-256 du contenu : si le hash n'a pas bougé après une sauvegarde admin,
+  // on ne rappelle pas l'API d'embedding. Ré-indexation incrémentale.
+  contentHash String
+  embedding   Unsupported("vector(1536)")?
+  tsv         Unsupported("tsvector")? // recherche plein texte française (branche lexicale du RRF)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([sourceType, sourceId, contentHash])
+  @@index([sourceType, sourceId])
+  @@map("knowledge_chunks")
+}
+
+model ChatSession {
+  id         String   @id @default(cuid())
+  visitorKey String // hash du couple IP+UA, jamais l'IP — sert au rate limiting
+  createdAt  DateTime @default(now())
+
+  messages ChatMessage[]
+
+  @@index([visitorKey, createdAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id            String   @id @default(cuid())
+  chatSessionId String
+  role          ChatRole
+  content       String   @db.Text
+  // Chunks réellement transmis à Gemini : [{ id, title, sourceType, sourceId, score }]
+  // C'est la traçabilité du RAG — on peut auditer chaque réponse a posteriori.
+  citations     Json?
+  // true quand le score RRF est passé sous le seuil et que Gemini n'a PAS été appelé.
+  refused       Boolean  @default(false)
+  latencyMs     Int?
+  createdAt     DateTime @default(now())
+
+  chatSession ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+
+  @@index([chatSessionId, createdAt])
+  @@map("chat_messages")
+}
+
+// ============================================================================
+//  ANALYTICS
+// ============================================================================
+
+model PageView {
+  id       String   @id @default(cuid())
+  path     String
+  referrer String?
+  country  String? // en-tête géo de Vercel
+  // sha256(ip + userAgent + sel_du_jour), tronqué à 16 caractères.
+  // Compte les visiteurs uniques sur 24 h, ne remonte à personne,
+  // et le sel tournant empêche tout suivi inter-journalier.
+  sessionHash String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([path, createdAt(sort: Desc)])
+  @@map("page_views")
+}
+
+// ============================================================================
+//  MIGRATION SQL MANUELLE — à exécuter après `prisma migrate dev`
+//  Prisma ne génère pas les index vectoriels ni les colonnes générées.
+//  Crée le fichier prisma/migrations/<timestamp>_pgvector/migration.sql
+//  et colle ce bloc :
+// ----------------------------------------------------------------------------
+//  CREATE EXTENSION IF NOT EXISTS vector;
+//
+//  -- Index vectoriel. HNSW plafonne à 2000 dimensions pour le type `vector` :
+//  -- c'est la raison pour laquelle les embeddings sont tronqués à 1536
+//  -- (et re-normalisés L2 côté serveur — Gemini ne normalise pas les sorties MRL).
+//  CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_hnsw_idx
+//    ON knowledge_chunks
+//    USING hnsw (embedding vector_cosine_ops)
+//    WITH (m = 16, ef_construction = 64);
+//
+//  -- Colonne générée pour la branche lexicale de la recherche hybride.
+//  -- STORED : calculée à l'écriture, jamais à la lecture.
+//  ALTER TABLE knowledge_chunks
+//    DROP COLUMN IF EXISTS tsv;
+//  ALTER TABLE knowledge_chunks
+//    ADD COLUMN tsv tsvector
+//    GENERATED ALWAYS AS (
+//      setweight(to_tsvector('french', coalesce(title, '')),   'A') ||
+//      setweight(to_tsvector('french', coalesce(content, '')), 'B')
+//    ) STORED;
+//
+//  CREATE INDEX IF NOT EXISTS knowledge_chunks_tsv_idx
+//    ON knowledge_chunks USING GIN (tsv);
+//
+//  -- Rétention analytics : 90 jours, purge par tâche cron Vercel.
+//  CREATE INDEX IF NOT EXISTS page_views_created_brin_idx
+//    ON page_views USING BRIN (created_at);
+// ============================================================================

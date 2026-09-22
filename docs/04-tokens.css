@@ -1,0 +1,475 @@
+/* ==========================================================================
+   Personal Career Platform — tokens & primitives
+   app/globals.css
+
+   Ce fichier est la seule source de vérité visuelle.
+   Aucune valeur brute (#hex, px de couleur, durée) ne doit apparaître
+   ailleurs dans le code. Si Codex écrit `#fff` dans un composant, c'est
+   un bug à corriger.
+   ========================================================================== */
+
+@import "tailwindcss";
+
+/* --------------------------------------------------------------------------
+   1. TOKENS
+   -------------------------------------------------------------------------- */
+
+@theme {
+  /* --- Couleurs : encre sur papier. Cinq, pas six. ----------------------- */
+  --color-paper:      #FAF8F3;
+  --color-surface:    #F2EEE5;
+  --color-ink:        #14130F;   /* jamais #000 */
+  --color-ink-muted:  #6B6760;
+  --color-rule:       #DCD7CC;
+  --color-vermilion:  #C2410C;   /* UNE occurrence visible par écran */
+
+  /* États sémantiques — dérivés, pas de nouvelles teintes */
+  --color-positive:   #3F6212;
+  --color-negative:   var(--color-vermilion);
+
+  /* --- Typographie ------------------------------------------------------ */
+  /* Variables injectées par next/font dans app/layout.tsx */
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body:    var(--font-inter), system-ui, sans-serif;
+  --font-mono:    var(--font-geist-mono), ui-monospace, monospace;
+
+  --text-2xs:  0.6875rem;  /* 11px — labels en marge */
+  --text-xs:   0.8125rem;  /* 13px — métadonnées */
+  --text-sm:   0.9375rem;  /* 15px — interface, admin */
+  --text-base: 1.0625rem;  /* 17px — corps. 17, pas 16. */
+  --text-lg:   1.375rem;   /* 22px — chapô */
+  --text-xl:   1.875rem;   /* 30px */
+  --text-2xl:  2.5rem;     /* 40px — titre de section */
+  --text-3xl:  clamp(3rem, 7vw, 5.5rem);
+  --text-4xl:  clamp(4rem, 13vw, 11rem);   /* déclaration d'ouverture */
+
+  --leading-display: 0.92;  /* interlignage négatif — le geste éditorial */
+  --leading-tight:   1.15;
+  --leading-body:    1.6;
+
+  --tracking-display: -0.03em;
+  --tracking-mono:     0.08em;  /* les labels mono sont toujours espacés */
+
+  /* --- Espacement : sauts francs, pas de rampe linéaire ----------------- */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --space-36: 9rem;    /* espacement inter-sections desktop */
+  --space-54: 13.5rem;
+
+  /* --- Motion : UNE courbe pour tout le site ---------------------------- */
+  --ease:       cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-state:  120ms;
+  --dur-enter:  380ms;
+  --dur-page:   600ms;
+
+  /* --- Structure -------------------------------------------------------- */
+  --measure:      34em;    /* 68 caractères — plafond du corps de texte */
+  --gutter:       1.5rem;
+  --gutter-lg:    3rem;
+  --rule-width:   1px;     /* JAMAIS épaissi */
+  --meta-col:     10rem;   /* largeur de la colonne de métadonnées */
+}
+
+/* --------------------------------------------------------------------------
+   2. BASE
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  /* Pas de scroll-behavior: smooth global — ça casse le retour arrière
+     et ça entre en conflit avec les View Transitions. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Rien n'est arrondi. Règle globale plutôt que discipline individuelle. */
+* { border-radius: 0; }
+
+::selection {
+  background: var(--color-vermilion);
+  color: var(--color-paper);
+}
+
+/* Focus visible unique et cohérent — exigence d'accessibilité de la grille. */
+:focus-visible {
+  outline: 2px solid var(--color-vermilion);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   3. PRIMITIVES TYPOGRAPHIQUES
+   -------------------------------------------------------------------------- */
+
+.display {
+  font-family: var(--font-display);
+  font-variation-settings: "SOFT" 0, "WONK" 1, "opsz" 144;
+  font-weight: 400;                    /* jamais 700 en très grande taille */
+  line-height: var(--leading-display);
+  letter-spacing: var(--tracking-display);
+  text-wrap: balance;
+}
+
+.display--statement { font-size: var(--text-4xl); }
+.display--page      { font-size: var(--text-3xl); }
+.display--section   { font-size: var(--text-2xl); line-height: var(--leading-tight); }
+
+/* Le label mono : numéros de section, années, statuts, en-têtes de table. */
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mono--data {
+  font-size: var(--text-xs);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-ink);
+}
+
+/* Tout chiffre aligné verticalement, partout. */
+table, .tabular { font-variant-numeric: tabular-nums; }
+
+.prose-body {
+  max-width: var(--measure);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  text-wrap: pretty;
+}
+
+/* --------------------------------------------------------------------------
+   4. GRILLE DE SECTION — la structure signature
+   Utilisée par SectionFrame.tsx, réutilisée par les six sections.
+   -------------------------------------------------------------------------- */
+
+.section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  padding-inline: var(--gutter);
+  padding-block: var(--space-16);
+  border-top: var(--rule-width) solid var(--color-rule);
+}
+
+.section__meta {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.section__body { min-width: 0; }
+
+@media (min-width: 64rem) {
+  .section {
+    grid-template-columns: var(--meta-col) repeat(12, 1fr);
+    gap: var(--space-8);
+    padding-inline: var(--gutter-lg);
+    padding-block: var(--space-36);
+    column-gap: var(--space-6);
+  }
+
+  .section__meta {
+    grid-column: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    position: sticky;
+    top: var(--space-8);
+    align-self: start;
+    height: max-content;
+  }
+
+  /* Ancrage asymétrique — le contenu ne se centre JAMAIS.
+     La valeur est passée en attribut data- par SectionFrame. */
+  .section__body                       { grid-column: 2 / span 12; }
+  [data-anchor="1-11"]  .section__body { grid-column: 2  / span 11; }
+  [data-anchor="1-12"]  .section__body { grid-column: 2  / span 12; }
+  [data-anchor="3-10"]  .section__body { grid-column: 4  / span 8;  }
+  [data-anchor="4-12"]  .section__body { grid-column: 5  / span 9;  }
+  [data-anchor="2-9"]   .section__body { grid-column: 3  / span 8;  }
+  [data-anchor="5-12"]  .section__body { grid-column: 6  / span 8;  }
+}
+
+/* --------------------------------------------------------------------------
+   5. FILETS — le seul séparateur autorisé
+   -------------------------------------------------------------------------- */
+
+.rule    { border: 0; border-top: var(--rule-width) solid var(--color-rule); margin: 0; }
+.rule--v { border: 0; border-left: var(--rule-width) solid var(--color-rule); align-self: stretch; }
+
+/* --------------------------------------------------------------------------
+   6. INDEX DES TRAVAUX — table, pas cartes
+   -------------------------------------------------------------------------- */
+
+.index-table { width: 100%; border-collapse: collapse; }
+
+.index-table th {
+  text-align: left;
+  padding-block: var(--space-2);
+  border-bottom: var(--rule-width) solid var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  font-weight: 400;
+}
+
+.index-row {
+  border-bottom: var(--rule-width) solid var(--color-rule);
+  transition: background-color var(--dur-state) var(--ease);
+}
+
+.index-row:hover,
+.index-row:focus-within { background: var(--color-surface); }
+
+.index-row:hover .index-row__year { color: var(--color-vermilion); }
+
+.index-row td {
+  padding-block: var(--space-4);
+  vertical-align: baseline;
+}
+
+.index-row__title {
+  font-family: var(--font-display);
+  font-variation-settings: "SOFT" 0, "WONK" 1, "opsz" 48;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.index-row__year,
+.index-row__stack {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  transition: color var(--dur-state) var(--ease);
+}
+
+/* Sur mobile la table devient une liste de blocs à filets — toujours pas des cartes. */
+@media (max-width: 47.99rem) {
+  .index-table thead { display: none; }
+  .index-table tr    { display: grid; grid-template-columns: 1fr; gap: var(--space-1); }
+  .index-table td    { padding-block: var(--space-1); }
+  .index-row         { padding-block: var(--space-4); }
+}
+
+/* --------------------------------------------------------------------------
+   7. FORMULAIRES — filet bas uniquement, label au-dessus
+   -------------------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.field__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+.field__input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: var(--rule-width) solid var(--color-rule);
+  padding-block: var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-base);
+  color: var(--color-ink);
+  transition: border-color var(--dur-state) var(--ease);
+}
+
+.field__input:hover { border-bottom-color: var(--color-ink-muted); }
+.field__input:focus {
+  outline: none;
+  border-bottom-color: var(--color-vermilion);
+  border-bottom-width: 2px;
+}
+
+.field__input[aria-invalid="true"] { border-bottom-color: var(--color-negative); }
+
+.field__error {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-negative);
+}
+
+/* --------------------------------------------------------------------------
+   8. BOUTONS — deux variantes, pas cinq
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  border: var(--rule-width) solid var(--color-ink);
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: background-color var(--dur-state) var(--ease),
+              color var(--dur-state) var(--ease);
+}
+
+.btn:hover { background: var(--color-ink); color: var(--color-paper); }
+
+/* UNE seule occurrence par écran. */
+.btn--primary {
+  background: var(--color-vermilion);
+  border-color: var(--color-vermilion);
+  color: var(--color-paper);
+}
+.btn--primary:hover { background: var(--color-ink); border-color: var(--color-ink); }
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* --------------------------------------------------------------------------
+   9. MOTION
+   -------------------------------------------------------------------------- */
+
+/* M1 — révélation typographique masquée.
+   Le wrapper masque, l'enfant translate. Décalage posé en style inline
+   par RevealLines.tsx : --i = index de ligne. */
+.reveal-line { overflow: hidden; display: block; }
+
+.reveal-line > span {
+  display: block;
+  animation: reveal-up var(--dur-enter) var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes reveal-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+
+/* M3 — entrée liée au scroll, CSS pur.
+   Pas d'IntersectionObserver, pas de Framer Motion, pas de "use client".
+   La section animée reste un Server Component. 0 KB de JS. */
+@supports (animation-timeline: view()) {
+  .enter {
+    animation: enter-fade linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 42%;
+  }
+}
+
+@keyframes enter-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* M2 — transitions de page.
+   view-transition-name est posé par composant (titre de projet, couverture). */
+@view-transition { navigation: auto; }
+
+::view-transition-group(*) {
+  animation-duration: var(--dur-page);
+  animation-timing-function: var(--ease);
+}
+
+/* Accessibilité — non négociable, c'est dans la grille d'évaluation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  @view-transition { navigation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   10. ADMIN — même système, densité augmentée
+   -------------------------------------------------------------------------- */
+
+.admin {
+  font-size: var(--text-sm);
+  --space-36: var(--space-12);   /* l'échelle d'espacement décroît d'un cran */
+  --space-16: var(--space-8);
+}
+
+.admin-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+
+.admin-table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--rule-width) solid var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  font-weight: 400;
+}
+
+.admin-table td {
+  padding: var(--space-3);
+  border-bottom: var(--rule-width) solid var(--color-rule);
+  height: 40px;
+}
+
+.admin-table tbody tr:hover { background: var(--color-surface); }
+
+.admin-nav__link {
+  display: block;
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  border-left: 2px solid transparent;
+  transition: color var(--dur-state) var(--ease),
+              border-color var(--dur-state) var(--ease);
+}
+
+.admin-nav__link:hover { color: var(--color-ink); }
+
+.admin-nav__link[aria-current="page"] {
+  color: var(--color-ink);
+  border-left-color: var(--color-vermilion);
+}
+
+/* Badge d'état — texte mono encadré, pas une pastille colorée arrondie. */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border: var(--rule-width) solid currentColor;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+}
+
+.badge--live    { color: var(--color-positive);  }
+.badge--draft   { color: var(--color-ink-muted); }
+.badge--urgent  { color: var(--color-vermilion); }

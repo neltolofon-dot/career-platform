@@ -1,0 +1,32 @@
+# env — jamais versionné
+.env
+.env.local
+.env*.local
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+
+# vercel
+.vercel
+
+# uploads bruts (avant ré-encodage Sharp)
+/assets/raw
+
+# logs
+*.log
+
+# build
+/build
+/coverage
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
