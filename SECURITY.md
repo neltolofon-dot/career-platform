@@ -1,5 +1,147 @@
 # Security
 
+## Vérifications d'authentification et de contrôle d'accès
+
+Rejouées le 2026-09-22 contre `https://career-platform-pied.vercel.app`, après déploiement
+du RBAC (D1/D2, `docs/07-AUTH-CODE.md`).
+
+### 1. API admin sans cookie → 401, jamais une redirection
+
+```
+$ curl -i https://career-platform-pied.vercel.app/api/admin/ping
+
+HTTP/1.1 401 Unauthorized
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Content-Type: application/json
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+
+{"error":"Unauthorized"}
+```
+
+### 2. Page admin sans cookie → redirection vers /login
+
+```
+$ curl -i https://career-platform-pied.vercel.app/admin
+
+HTTP/1.1 307 Temporary Redirect
+Location: /login
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+
+Redirecting...
+```
+
+### 3. Méthode non autorisée → 405
+
+```
+$ curl -i -X POST https://career-platform-pied.vercel.app/api/admin/ping
+
+HTTP/1.1 405 Method Not Allowed
+Allow: GET
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+```
+
+### 4. Rate limit du login — pas un test curl, et c'est volontaire
+
+`docs/07-AUTH-CODE.md` demandait à l'origine un test curl attendant un code
+HTTP 429 après plusieurs échecs. **Ce test ne peut pas fonctionner** :
+`loginAction` est une Server Action React. Next.js encapsule systématiquement
+sa réponse dans un payload RSC renvoyé en **200**, que l'action réussisse ou
+échoue — le statut HTTP ne porte jamais l'information métier. Un
+`curl -w "%{http_code}"` verra donc toujours 200, qu'il y ait blocage ou non.
+**Ce n'est pas un défaut d'implémentation, c'est le comportement du
+framework** pour toute Server Action invoquée par un formulaire.
+
+La vérification réelle porte sur le message affiché à l'écran, via
+`scripts/test-ratelimit.mjs` (`npm run test:ratelimit`) : un vrai navigateur
+headless (Playwright) tente 6 connexions avec un email de test dédié
+(jamais `ADMIN_EMAIL`, pour ne jamais bloquer le vrai compte), et vérifie que
+les tentatives 1 à 5 échouent sur les identifiants tandis que la 6e est
+bloquée par `loginRateLimitByAccount` (`slidingWindow(5, '15 m')`).
+
+Exécuté contre un environnement `dev` propre (clés Redis jamais utilisées
+auparavant — voir Incident 002 ci-dessous sur la contamination inter-environnements) :
+
+```
+$ npm run test:ratelimit
+
+Cible : http://localhost:3000
+Compte de test : ratelimit-verification+1790109404286@career-platform.invalid
+
+Tentative 1/6 — refusé — "Identifiants invalides."
+Tentative 2/6 — refusé — "Identifiants invalides."
+Tentative 3/6 — refusé — "Identifiants invalides."
+Tentative 4/6 — refusé — "Identifiants invalides."
+Tentative 5/6 — refusé — "Identifiants invalides."
+Tentative 6/6 — BLOQUÉ — "Trop de tentatives. Réessayez dans quelques minutes."
+
+OK — tentatives 1 à 5 non bloquées, tentative 6 bloquée par le rate limit.
+```
+
+**Note.** Les routes API publiques *mutatives* à venir (`/api/contact`,
+`/api/booking`, `/api/chat`) ne sont **pas** des Server Actions — ce sont des
+route handlers classiques. Elles renverront de vrais codes **429** observables
+au curl, testables par un auditeur externe sans navigateur. La distinction
+n'est pas cosmétique : un formulaire de login progressive-enhancement doit
+rester utilisable sans JS (d'où la Server Action) ; une API publique appelée
+par `fetch()` n'a pas cette contrainte et expose son état dans le code HTTP,
+comme attendu par tout client HTTP standard.
+
+### 5. En-têtes de sécurité présents
+
+```
+$ curl -sI https://career-platform-pied.vercel.app/ | grep -iE "content-security|x-content-type|referrer|permissions|strict-transport"
+
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+```
+
+### 6. Cookie de session et hash en base — preuve de la fiche 1.1
+
+Connexion réelle effectuée en production (Playwright) avec `ADMIN_EMAIL` /
+`ADMIN_PASSWORD`. Cookie lu directement depuis le contexte du navigateur :
+
+```json
+{
+  "name": "__Host-session",
+  "path": "/",
+  "httpOnly": true,
+  "secure": true,
+  "sameSite": "Lax"
+}
+```
+
+Les cinq attributs attendus sont confirmés : préfixe `__Host-`, `HttpOnly`,
+`Secure`, `SameSite=Lax`, `Path=/`.
+
+Preuve que le token brut n'existe pas en base — recherche directe par sa
+valeur exacte, puis par son SHA-256 :
+
+```
+Hash attendu (sha256 du token du cookie) : 0a3e80d05f360b0b5872ff5b627d98e42af0007db983535d177722869f5252ed
+Session trouvée par tokenHash = sha256(token) ? OUI
+Session trouvée par tokenHash = token BRUT ?     NON (attendu)
+tokenHash stocké en base : 0a3e80d05f360b0b5872ff5b627d98e42af0007db983535d177722869f5252ed
+Correspond exactement au SHA-256 calculé ? true
+```
+
+Un dump de la base ne contient que ce hash — inutilisable pour reconstruire
+le cookie et se faire passer pour l'admin.
+
+---
+
 ## Incident 001 — exposition de secrets au déploiement
 
 **Date.** 2026-09-22.
@@ -74,3 +216,34 @@ aucune session ni aucun accès ne peut plus être ouvert avec l'ancien mot de pa
 canal de communication, même privé — y compris pendant la remédiation d'un incident de
 sécurité. La remédiation elle-même est un moment à risque : générer un nouveau secret ne vaut
 que si sa diffusion est aussi étroitement contrôlée que celle de l'ancien.
+
+---
+
+## Incident 002 — quota de rate limit partagé entre environnements
+
+**Date.** 2026-09-22.
+
+**Contexte.** Tests de connexion en local (`npm run dev`) et vérification manuelle du rate
+limit en production utilisaient la **même base Upstash** — `UPSTASH_REDIS_REST_URL` /
+`UPSTASH_REDIS_REST_TOKEN` sont identiques dans `.env` et dans les variables de production
+Vercel (décision D5, un seul projet Upstash pour tout le cycle de vie).
+
+**Conséquence constatée.** Des tests locaux répétés ont consommé le quota de rate limit du
+compte admin **en production** (`rl:login:acct:neltolofon@gmail.com`, 5 tentatives/15 min) :
+une tentative de connexion réelle, avec le bon mot de passe, s'est retrouvée bloquée par le
+message « Trop de tentatives » — pas un faux positif, le mécanisme a fonctionné exactement
+comme conçu, mais contre l'environnement qu'il ne fallait pas cibler.
+
+**Cause.** Aucune isolation par environnement sur les clés Redis. `dev`, `preview` et
+`production` partagent tout : rate limit, cache versionné, verrou de créneau, cache de
+session.
+
+**Correction.** `lib/redis.ts` préfixe désormais toutes les clés par
+`ENV = process.env.VERCEL_ENV ?? 'dev'` (voir `ARCHITECTURE.md` § Infrastructure). Une
+tentative de connexion locale et une tentative en production n'affectent plus le même
+compteur.
+
+**Leçon retenue.** Une seule base partagée entre environnements est un choix d'infrastructure
+défendable (coût, simplicité) — mais seulement si chaque client applicatif isole ses propres
+clés. Sans ce préfixe, l'environnement de test devient un vecteur de déni de service contre
+la production, par sa propre équipe.
