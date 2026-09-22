@@ -40,11 +40,14 @@ secret qui a transité par un chemin non prévu est traité comme potentiellemen
 | `DATABASE_URL` / `DIRECT_URL` (mot de passe Neon) | ✅ Rotée |
 | `GEMINI_API_KEY` | ✅ Rotée |
 | `SESSION_SECRET` | ✅ Régénérée (32 octets aléatoires, hex) |
-| `ADMIN_PASSWORD` | ✅ Régénéré (18 octets aléatoires, base64url), hash Argon2id resynchronisé |
-| `UPSTASH_REDIS_REST_TOKEN` | ⚠️ **Non rotée** — reste avec sa valeur d'origine. Point ouvert. |
+| `ADMIN_PASSWORD` | ✅ Régénéré deux fois (18 octets aléatoires, base64url), hash Argon2id resynchronisé — voir Incident 001-bis |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | ✅ Rotée (nouvelle base Upstash) |
+
+**Rotation complète : 6/6 secrets.**
 
 Les 6 variables d'environnement de production sur Vercel ont été mises à jour avec les
-nouvelles valeurs et un nouveau déploiement a été effectué.
+nouvelles valeurs à chaque rotation, suivies d'un redéploiement et d'une vérification de
+statut HTTP 200.
 
 **Leçon retenue.** `.gitignore` protège un dépôt git ; il ne protège **rien** en dehors de
 git. Chaque outil de déploiement a son propre mécanisme d'exclusion (`.vercelignore` pour
@@ -52,3 +55,22 @@ Vercel) et l'absence de ce fichier n'est pas un no-op silencieux — c'est un fa
 vérification qui aurait dû exister *avant* le premier déploiement (lister les fichiers de la
 source déployée et y chercher `.env`) existe maintenant *après coup* comme étape systématique
 de toute procédure de déploiement sur ce projet.
+
+---
+
+### Incident 001-bis — mot de passe régénéré exposé hors de `.env`
+
+**Contexte.** Pendant le traitement de l'Incident 001, un `ADMIN_PASSWORD` nouvellement
+généré a été exposé par l'utilisateur en dehors de `.env` (recopié dans un canal hors du
+fichier de configuration).
+
+**Détection.** Immédiate — signalé par l'utilisateur lui-même dès que constaté.
+
+**Correction.** Nouveau `ADMIN_PASSWORD` regénéré (18 octets aléatoires, base64url), écrit
+dans `.env`, hash Argon2id resynchronisé via `prisma db seed`. L'ancien hash est invalidé :
+aucune session ni aucun accès ne peut plus être ouvert avec l'ancien mot de passe.
+
+**Leçon retenue.** Un secret ne doit jamais être affiché en sortie d'outil ni recopié dans un
+canal de communication, même privé — y compris pendant la remédiation d'un incident de
+sécurité. La remédiation elle-même est un moment à risque : générer un nouveau secret ne vaut
+que si sa diffusion est aussi étroitement contrôlée que celle de l'ancien.
