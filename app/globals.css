@@ -473,3 +473,17 @@ table, .tabular { font-variant-numeric: tabular-nums; }
 .badge--live    { color: var(--color-positive);  }
 .badge--draft   { color: var(--color-ink-muted); }
 .badge--urgent  { color: var(--color-vermilion); }
+
+/* Classe utilitaire d'accessibilité : masque visuellement, garde pour
+   les lecteurs d'écran. Utilisée sur les en-têtes de colonne sans libellé. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

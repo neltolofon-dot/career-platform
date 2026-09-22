@@ -142,6 +142,102 @@ le cookie et se faire passer pour l'admin.
 
 ---
 
+## API
+
+CRUD projets (`docs/08-CMS-CODE.md`), rejoué le 2026-09-22 contre
+`https://career-platform-pied.vercel.app` avec un cookie de session réel.
+
+### 1. Liste paginée
+
+```
+$ curl -s -H "Cookie: $COOKIE" "$URL/api/admin/projects?page=1&perPage=5"
+
+{"items":[],"page":1,"perPage":5,"total":0,"totalPages":1}
+```
+
+### 2. Plafond de pagination respecté → 400
+
+```
+$ curl -s -o /dev/null -w "%{http_code}\n" -H "Cookie: $COOKIE" "$URL/api/admin/projects?perPage=999999"
+
+400
+```
+
+### 3. Sans cookie → 401
+
+```
+$ curl -s -o /dev/null -w "%{http_code}\n" "$URL/api/admin/projects"
+
+401
+```
+
+### 4. Méthode interdite → 405
+
+```
+$ curl -s -o /dev/null -w "%{http_code}\n" -X PUT -H "Cookie: $COOKIE" "$URL/api/admin/projects"
+
+405
+```
+
+### 5. Validation → 422 avec le détail des champs
+
+```
+$ curl -s -H "Cookie: $COOKIE" -H "Content-Type: application/json" -d '{"title":"x"}' "$URL/api/admin/projects"
+
+{"error":"Validation","fields":{"slug":["Invalid input: expected string, received undefined"],"title":["Too small: expected string to have >=2 characters"],"summary":["Invalid input: expected string, received undefined"],"role":["Invalid input: expected string, received undefined"],"domain":["Invalid input: expected string, received undefined"],"year":["Invalid input: expected number, received NaN"]}}
+```
+
+### 6. Slug en double → 409
+
+```
+$ curl -s -w "\nHTTP_CODE:%{http_code}\n" -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
+  -d '{"slug":"test-curl-409", ...}' "$URL/api/admin/projects"
+HTTP_CODE:201
+
+$ curl -s -w "\nHTTP_CODE:%{http_code}\n" -H "Cookie: $COOKIE" -H "Content-Type: application/json" \
+  -d '{"slug":"test-curl-409", ...}' "$URL/api/admin/projects"
+
+{"error":"Ce slug est déjà utilisé."}
+HTTP_CODE:409
+```
+
+Projet de test supprimé après vérification (`DELETE /api/admin/projects/{id}` → 204).
+
+### 7. Aucun message Prisma dans les réponses d'erreur
+
+```
+$ curl -s -H "Cookie: $COOKIE" "$URL/api/admin/projects/inexistant"
+
+{"error":"Introuvable"}
+
+$ curl -s -H "Cookie: $COOKIE" "$URL/api/admin/projects/inexistant" | grep -i prisma
+(sortie vide)
+```
+
+### Invalidation de cache — preuve par incrément direct
+
+`afterWrite()` (`lib/services/projects.ts`) appelle `bumpCacheVersion()` après chaque écriture.
+Vérifié directement dans Redis, avant/après deux écritures successives :
+
+```
+Valeur avant création  : production:portfolio:version = 2
+Valeur après création  : production:portfolio:version = 3
+Valeur après suppression : production:portfolio:version = 4
+```
+
+Incrément exact de 1 à chaque écriture — c'est la preuve que l'invalidation de cache
+versionné (D13) se déclenche systématiquement, sans dépendre du transport (Server Action ou
+route handler) qui a initié l'écriture.
+
+### CRUD réel via l'interface admin
+
+En plus des tests curl, un projet réel (« MyDayPlanner ») a été créé via
+`/admin/projects/new`, vérifié dans la liste, modifié (champ `order` et résumé), puis
+supprimé via l'interface — cycle complet create → read → update → delete validé dans le
+navigateur, pas seulement au niveau de l'API.
+
+---
+
 ## Incident 001 — exposition de secrets au déploiement
 
 **Date.** 2026-09-22.
