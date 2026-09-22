@@ -148,6 +148,8 @@ réaction d'état à 120 ms. `prefers-reduced-motion` respecté partout.
   l'intégration Vercel-Upstash, et `Redis.fromEnv()` (`@upstash/redis`) les lit sans
   configuration. Un seul nommage dans tout le code, `.env`, `.env.example` et
   `scripts/check-env.mjs` — pas de fallback entre les deux conventions.
+- **`vercel deploy` (CLI) ignore `.gitignore`** — seul `.vercelignore` fait foi. Sans lui,
+  `.env` finit dans la source du déploiement (incident 001, cf. `SECURITY.md`).
 
 ---
 
