@@ -5,7 +5,7 @@ import { getSession, type SessionUser } from './session'
  * ┌───────────────────────────────────────────────────────────────────────┐
  * │  C'EST ICI QU'EST LA FRONTIÈRE DE SÉCURITÉ.                           │
  * │                                                                       │
- * │  Pas dans middleware.ts. Le middleware Next.js s'exécute avant le     │
+ * │  Pas dans proxy.ts. Le proxy Next.js s'exécute avant le               │
  * │  routage et a déjà été contourné : CVE-2026-64642 permettait à une    │
  * │  requête forgée de sauter toute autorisation qui y vivait.            │
  * │                                                                       │

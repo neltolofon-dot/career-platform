@@ -3,22 +3,28 @@ import { NextResponse, type NextRequest } from 'next/server'
 /**
  * ⚠️ CE FICHIER NE FAIT PAS D'AUTORISATION.
  *
- * Il ne regarde que la PRÉSENCE d'un cookie, jamais sa validité — il ne
- * peut pas : le middleware tourne en Edge runtime, sans accès à Prisma.
+ * Next.js 16 a renommé "middleware" en "proxy" précisément pour
+ * décourager qu'on y place de la logique applicative : le terme
+ * "middleware" faisait croire à un middleware Express. Vercel le
+ * documente comme une frontière RÉSEAU devant l'application, tournant
+ * en Edge Runtime, séparée de la région de l'app, et recommande de
+ * ne l'utiliser qu'en dernier recours.
  *
- * Son seul rôle est le confort : éviter d'afficher une page admin vide à
+ * Ce fichier ne regarde que la PRÉSENCE d'un cookie, jamais sa
+ * validité — il ne le peut pas : pas d'accès à Prisma depuis l'Edge.
+ * Son seul rôle est d'éviter d'afficher une page admin vide à
  * quelqu'un qui n'est manifestement pas connecté.
  *
  * L'autorisation réelle est dans requireAdminPage() / requireAdminApi(),
- * appelées au contact de la donnée. Voir CVE-2026-64642 : une requête
- * forgée peut sauter ce middleware. Elle ne peut pas sauter un appel de
+ * au contact de la donnée. Voir CVE-2026-64642 : une requête forgée
+ * pouvait sauter cette couche. Elle ne peut pas sauter un appel de
  * fonction à l'intérieur du composant qui lit la base.
  */
 
 const SESSION_COOKIE =
   process.env.NODE_ENV === 'production' ? '__Host-session' : 'session'
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasCookie = request.cookies.has(SESSION_COOKIE)
 
   if (!hasCookie) {

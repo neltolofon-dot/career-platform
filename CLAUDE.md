@@ -150,6 +150,9 @@ réaction d'état à 120 ms. `prefers-reduced-motion` respecté partout.
   `scripts/check-env.mjs` — pas de fallback entre les deux conventions.
 - **`vercel deploy` (CLI) ignore `.gitignore`** — seul `.vercelignore` fait foi. Sans lui,
   `.env` finit dans la source du déploiement (incident 001, cf. `SECURITY.md`).
+- **`middleware.ts` est déprécié depuis Next.js 16.1 au profit de `proxy.ts`.** Le renommage
+  est volontaire : Vercel décourage d'y mettre de la logique applicative, c'est une frontière
+  réseau, pas une couche d'autorisation.
 
 ---
 
