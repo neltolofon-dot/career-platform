@@ -1,11 +1,9 @@
 import { Prisma, type ContentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { bumpCacheVersion, cached } from '@/lib/redis'
+import { cached } from '@/lib/redis'
 import {
   projectCreateSchema,
   projectUpdateSchema,
-  type ProjectCreateInput,
-  type ProjectUpdateInput,
 } from '@/lib/validation/project'
 import {
   paginate,
@@ -13,7 +11,14 @@ import {
   type Pagination,
   type Paginated,
 } from '@/lib/pagination'
-import { onContentChanged } from '@/lib/rag/hooks'
+import {
+  ValidationError,
+  ConflictError,
+  NotFoundError,
+  parseOrThrow,
+  afterContentWrite,
+  translatePrismaError,
+} from '@/lib/services/_shared'
 
 /**
  * ┌──────────────────────────────────────────────────────────────────────┐
@@ -27,33 +32,11 @@ import { onContentChanged } from '@/lib/rag/hooks'
  * └──────────────────────────────────────────────────────────────────────┘
  */
 
-// ─── ERREURS MÉTIER TYPÉES ───────────────────────────────────────────────────
-
-/**
- * Erreurs typées plutôt que des chaînes : chaque transport décide comment
- * les rendre (JSON + statut pour l'API, état de formulaire pour l'admin),
- * sans jamais exposer un message Prisma brut au client.
- */
-export class ValidationError extends Error {
-  constructor(public readonly fields: Record<string, string[]>) {
-    super('Validation failed')
-    this.name = 'ValidationError'
-  }
-}
-
-export class ConflictError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'ConflictError'
-  }
-}
-
-export class NotFoundError extends Error {
-  constructor() {
-    super('Not found')
-    this.name = 'NotFoundError'
-  }
-}
+// Erreurs métier et helpers partagés (validation, effets de bord, erreurs
+// Prisma) : voir lib/services/_shared.ts, ré-exportés pour que les
+// transports existants (app/api/admin/projects/*, app/admin/projects/actions.ts)
+// continuent d'importer ValidationError/ConflictError/NotFoundError depuis ce fichier.
+export { ValidationError, ConflictError, NotFoundError }
 
 // ─── SÉLECTIONS ──────────────────────────────────────────────────────────────
 
@@ -152,12 +135,7 @@ export async function getProjectForAdmin(id: string) {
 // ─── ÉCRITURES ───────────────────────────────────────────────────────────────
 
 export async function createProject(raw: unknown) {
-  const parsed = projectCreateSchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.flatten().fieldErrors as Record<string, string[]>)
-  }
-
-  const data = parsed.data
+  const data = parseOrThrow(projectCreateSchema, raw)
 
   try {
     const project = await prisma.project.create({
@@ -171,17 +149,12 @@ export async function createProject(raw: unknown) {
     await afterWrite(project.id)
     return project
   } catch (error) {
-    throw translatePrismaError(error)
+    throw translatePrismaError(error, 'Ce slug est déjà utilisé.')
   }
 }
 
 export async function updateProject(id: string, raw: unknown) {
-  const parsed = projectUpdateSchema.safeParse(raw)
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.flatten().fieldErrors as Record<string, string[]>)
-  }
-
-  const data = parsed.data
+  const data = parseOrThrow(projectUpdateSchema, raw)
 
   try {
     const project = await prisma.project.update({
@@ -197,7 +170,7 @@ export async function updateProject(id: string, raw: unknown) {
     await afterWrite(project.id)
     return project
   } catch (error) {
-    throw translatePrismaError(error)
+    throw translatePrismaError(error, 'Ce slug est déjà utilisé.')
   }
 }
 
@@ -206,41 +179,13 @@ export async function deleteProject(id: string) {
     await prisma.project.delete({ where: { id } })
     await afterWrite(id, { removed: true })
   } catch (error) {
-    throw translatePrismaError(error)
+    throw translatePrismaError(error, 'Ce slug est déjà utilisé.')
   }
 }
 
 // ─── EFFETS DE BORD ──────────────────────────────────────────────────────────
 
-/**
- * Deux effets après CHAQUE écriture, centralisés ici pour qu'aucun
- * transport ne puisse les oublier :
- *
- * 1. Invalidation du cache par version — un INCR rend inatteignables
- *    toutes les clés de l'ancienne version, sans SCAN ni DEL en masse.
- * 2. Réindexation RAG — la base de connaissances du chatbot suit le CMS.
- *    Si on l'oublie, le chatbot répond sur des données mortes.
- */
+/** Fine couche locale au-dessus du socle partagé : fixe sourceType = PROJECT. */
 async function afterWrite(projectId: string, opts: { removed?: boolean } = {}) {
-  await bumpCacheVersion()
-  await onContentChanged({
-    sourceType: 'PROJECT',
-    sourceId: projectId,
-    removed: opts.removed ?? false,
-  })
-}
-
-/**
- * Traduit les codes Prisma en erreurs métier.
- *
- * C'est ce qui empêche un message Prisma d'atteindre le client : un
- * « Unique constraint failed on the fields: (`slug`) » révèle le nom de
- * mes colonnes et la structure de ma base.
- */
-function translatePrismaError(error: unknown): Error {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === 'P2002') return new ConflictError('Ce slug est déjà utilisé.')
-    if (error.code === 'P2025') return new NotFoundError()
-  }
-  return error instanceof Error ? error : new Error('Unknown error')
+  await afterContentWrite('PROJECT', projectId, opts.removed ?? false)
 }
