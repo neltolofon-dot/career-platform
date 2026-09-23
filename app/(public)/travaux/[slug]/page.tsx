@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getPublicProject, getPublicProjects } from '@/lib/services/public'
+import { getPublicProject, getPublicProjects, liveUrl } from '@/lib/services/public'
 import { SectionFrame } from '@/components/primitives/SectionFrame'
 import { Mono } from '@/components/primitives/Mono'
 import { Markdown } from '@/components/public/Markdown'
@@ -45,7 +45,8 @@ export default async function ProjectPage({ params }: Params) {
 
   if (!project) notFound()
 
-  const links = (project.links ?? {}) as { live?: string; repo?: string }
+  const links = (project.links ?? {}) as { repo?: string }
+  const live = liveUrl(project.links)
 
   return (
     <main>
@@ -70,6 +71,15 @@ export default async function ProjectPage({ params }: Params) {
           {project.summary}
         </p>
 
+        {live && (
+          <p style={{ marginTop: 'var(--space-6)' }}>
+            <a href={live} className="btn btn--primary" target="_blank" rel="noopener noreferrer">
+              Voir le site en ligne<span className="sr-only"> (nouvel onglet)</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </p>
+        )}
+
         <ProjectShot slug={project.slug} title={project.title} />
 
         <hr className="rule" style={{ margin: 'var(--space-8) 0' }} />
@@ -88,16 +98,6 @@ export default async function ProjectPage({ params }: Params) {
               <Mono data>{project.stack.join(' · ')}</Mono>
             </dd>
           </div>
-          {links.live && (
-            <div>
-              <Mono>En ligne</Mono>
-              <dd style={{ margin: 0 }}>
-                <a href={links.live} className="mono mono--data" rel="noopener noreferrer" target="_blank">
-                  {new URL(links.live).hostname}
-                </a>
-              </dd>
-            </div>
-          )}
           {links.repo && (
             <div>
               <Mono>Code</Mono>

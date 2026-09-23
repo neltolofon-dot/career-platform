@@ -213,14 +213,19 @@ a.mono:hover::before, a.mono:focus-visible::before {
 
 .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
-/* M-d — La ligne de table révèle un filet lime à gauche. */
+/* M-d — La ligne de table révèle un filet lime à gauche.
+   Porté par la première cellule, pas par le <tr> : un pseudo-élément sur une
+   ligne de table devient une cellule fantôme dans Chrome, et toutes les données
+   glissaient d'une colonne sous les en-têtes. ::after, car ::before affiche
+   déjà l'étiquette de la cellule sur mobile. */
 .index-row {
   border-bottom: var(--rule-width) solid var(--color-rule);
-  position: relative;
   transition: background-color var(--dur-state) var(--ease);
 }
 
-.index-row::before {
+.index-row > td:first-child { position: relative; }
+
+.index-row > td:first-child::after {
   content: "";
   position: absolute;
   left: 0; top: 0; bottom: 0;
@@ -232,7 +237,8 @@ a.mono:hover::before, a.mono:focus-visible::before {
 }
 
 .index-row:hover, .index-row:focus-within { background: var(--color-surface); }
-.index-row:hover::before, .index-row:focus-within::before { transform: scaleY(1); }
+.index-row:hover > td:first-child::after,
+.index-row:focus-within > td:first-child::after { transform: scaleY(1); }
 .index-row:hover .index-row__year { color: var(--color-vermilion); }
 
 /* --------------------------------------------------------------------------
@@ -946,10 +952,12 @@ body { background-image: none; }
   padding-top: var(--space-8);
 }
 
-.featured-project__link { color: var(--color-ink); }
+.featured-project__link,
+.index-row__live { color: var(--color-ink); }
 
 .featured-project__link,
 .index-row__title,
+.index-row__live,
 .chat-suggestion,
 .contact-services a {
   min-height: 2.75rem;
@@ -957,6 +965,7 @@ body { background-image: none; }
 
 .featured-project__link,
 .index-row__title,
+.index-row__live,
 .contact-services a { display: inline-flex; align-items: center; }
 
 .works-index-heading {
@@ -1242,8 +1251,15 @@ body { background-image: none; }
 
   .site-nav__link { padding-inline: 0; }
 
-  .site-nav__link span,
-  .site-nav__link:nth-child(4) { display: none; }
+  /* Les quatre sections restent dans le menu : « Assistant » est la
+     fonctionnalité la plus technique du site, la cacher sur mobile la
+     rendait introuvable. Seuls les numéros tombent, faute de place. */
+  .site-nav__link span { display: none; }
+}
+
+@media (max-width: 22.49rem) {
+  /* 320 px : les quatre entrées dépassaient l'écran de 2 px. */
+  .site-nav__link { font-size: var(--text-2xs); }
 }
 
 @media (min-width: 48rem) {

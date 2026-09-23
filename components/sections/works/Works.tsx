@@ -12,6 +12,7 @@ type Project = {
   stack: string[]
   summary: string
   featured: boolean
+  live: string | null
 }
 
 export function Works({

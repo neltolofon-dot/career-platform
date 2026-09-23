@@ -59,11 +59,20 @@ export async function resolveDomain(raw: unknown): Promise<string | null> {
   return parsed.success ? parsed.data : null
 }
 
+/**
+ * `links` est du JSON saisi dans l'admin, rendu tel quel dans un href.
+ * `z.url()` accepte javascript: et data: : seuls http(s) sortent d'ici.
+ */
+export function liveUrl(links: unknown): string | null {
+  const parsed = z.object({ live: z.url({ protocol: /^https?$/ }) }).safeParse(links)
+  return parsed.success ? parsed.data.live : null
+}
+
 export async function getPublicProjects(rawDomain?: unknown) {
   const domain = await resolveDomain(rawDomain)
 
   // Une clé par domaine : le cache d'un filtre ne sert jamais un autre filtre.
-  return cached(domain ? `projects:published:${domain}` : 'projects:published', 300, async () =>
+  const projects = await cached(domain ? `projects:published:${domain}` : 'projects:published', 300, async () =>
     prisma.project.findMany({
       where: { status: 'PUBLISHED', ...(domain ? { domain } : {}) },
       select: {
@@ -75,12 +84,15 @@ export async function getPublicProjects(rawDomain?: unknown) {
         stack: true,
         summary: true,
         featured: true,
+        links: true,
       },
       // Couvert par @@index([status, featured, order]) — vérifiable
       // par EXPLAIN ANALYZE, cf. PERFORMANCE.md
       orderBy: [{ featured: 'desc' }, { order: 'asc' }, { year: 'desc' }],
     }),
   )
+
+  return projects.map(({ links, ...project }) => ({ ...project, live: liveUrl(links) }))
 }
 
 export async function getPublicProject(slug: string) {

@@ -10,6 +10,7 @@ type Project = {
   year: number
   stack: string[]
   summary: string
+  live: string | null
 }
 
 export function FeaturedProject({ project, index }: { project: Project; index: number }) {
@@ -50,9 +51,18 @@ export function FeaturedProject({ project, index }: { project: Project; index: n
 
         <div className="featured-project__footer">
           <span className="mono mono--data">{project.stack.slice(0, 4).join(' · ')}</span>
-          <Link href={`/travaux/${project.slug}`} className="featured-project__link mono">
-            Voir le projet <span aria-hidden="true">↗</span>
-          </Link>
+          {/* ↗ = sort du portfolio : le titre et l'image mènent à l'étude de cas,
+              ce lien mène au site réel. Sans site en ligne, retour à l'étude de cas. */}
+          {project.live ? (
+            <a href={project.live} className="featured-project__link mono" target="_blank" rel="noopener noreferrer">
+              Voir le site<span className="sr-only"> {project.title} (nouvel onglet)</span>
+              <span aria-hidden="true">&nbsp;↗</span>
+            </a>
+          ) : (
+            <Link href={`/travaux/${project.slug}`} className="featured-project__link mono">
+              Voir le projet <span aria-hidden="true">→</span>
+            </Link>
+          )}
         </div>
       </div>
     </article>
