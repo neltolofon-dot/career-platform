@@ -7,6 +7,17 @@ const CHAT_MODEL = 'gemini-3.5-flash-lite'
 export const REFUSAL =
   "Je n'ai pas cette information dans les données publiques du candidat."
 
+/**
+ * Mesuré sur 7 questions : les pertinentes tombent entre 0.2646 et 0.2879,
+ * les hors-sujet entre 0.3976 et 0.4951. Seuil placé à 0.36, dans l'écart,
+ * avec une marge plus large côté questions légitimes — un faux refus est
+ * plus coûteux qu'une réponse sur un contexte faible, le prompt système
+ * servant de second filet. Le RRF seul ne peut pas jouer ce rôle :
+ * 1/(60+1) = 0.0164, donc le rang 1 dépasse toujours son seuil quelle que
+ * soit sa pertinence réelle. Le RRF ordonne, la distance cosinus qualifie.
+ */
+export const MAX_COSINE_DISTANCE = 0.36
+
 export type Answer = {
   text: string
   citations: { title: string; sourceType: string; sourceId: string; score: number }[]
@@ -52,7 +63,7 @@ Question du visiteur : ${question}`
 }
 
 export async function answerQuestion(question: string): Promise<Answer> {
-  const hits = await hybridSearch(question)
+  const { hits, bestDistance } = await hybridSearch(question)
 
   /**
    * ┌────────────────────────────────────────────────────────────────┐
@@ -65,6 +76,12 @@ export async function answerQuestion(question: string): Promise<Answer> {
    * │  Bénéfice secondaire : on économise l'appel API.               │
    * └────────────────────────────────────────────────────────────────┘
    */
+  if (!hits.length || bestDistance > MAX_COSINE_DISTANCE) {
+    return { text: REFUSAL, citations: [], refused: true }
+  }
+
+  // Second garde-fou, conservé en défense en profondeur (voir la limite
+  // du RRF dans le commentaire de MAX_COSINE_DISTANCE).
   const best = hits[0]?.score ?? 0
   if (!best || best < RELEVANCE_THRESHOLD) {
     return { text: REFUSAL, citations: [], refused: true }

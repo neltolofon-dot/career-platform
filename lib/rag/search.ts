@@ -41,19 +41,37 @@ const TOP_K = 6
  * AUCUNE des deux branches → on considère qu'on n'a pas l'information.
  *
  * À calibrer en observant les scores réels (voir le script de test).
+ *
+ * LIMITE MESURÉE : le rang 1 vectoriel vaut à lui seul 1/61 ≈ 0.0164 > 0.016,
+ * quelle que soit sa pertinence — ce seuil ne refuse donc jamais tant qu'un
+ * chunk existe. Le vrai garde-fou est MAX_COSINE_DISTANCE (lib/rag/answer.ts).
  */
 export const RELEVANCE_THRESHOLD = 0.016
 
 type RawRow = { id: string; rank: number }
+type VectorRow = RawRow & { distance: number }
 
-export async function hybridSearch(question: string): Promise<Hit[]> {
+export type SearchResult = {
+  hits: Hit[]
+  /**
+   * Distance cosinus (pgvector <=>, 0 = identique, 2 = opposé) du chunk le
+   * plus proche. Contrairement au score RRF — qui note un RANG et donne
+   * toujours ≈ 0.0164 au 1er, pertinent ou non — c'est une mesure ABSOLUE
+   * de proximité. Infinity si aucun chunk n'a d'embedding.
+   */
+  bestDistance: number
+}
+
+export async function hybridSearch(question: string): Promise<SearchResult> {
   const queryVector = await embedQuery(question)
   const literal = `[${queryVector.join(',')}]`
 
   // Les deux recherches partent en parallèle : elles sont indépendantes.
   const [vectorRows, lexicalRows] = await Promise.all([
-    prisma.$queryRaw<RawRow[]>`
-      SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> ${literal}::vector(${VECTOR_TYPE})) AS rank
+    prisma.$queryRaw<VectorRow[]>`
+      SELECT id,
+             (embedding <=> ${literal}::vector(${VECTOR_TYPE})) AS distance,
+             ROW_NUMBER() OVER (ORDER BY embedding <=> ${literal}::vector(${VECTOR_TYPE})) AS rank
       FROM knowledge_chunks
       WHERE embedding IS NOT NULL
       ORDER BY embedding <=> ${literal}::vector(${VECTOR_TYPE})
@@ -83,11 +101,14 @@ export async function hybridSearch(question: string): Promise<Hit[]> {
     scores.set(row.id, (scores.get(row.id) ?? 0) + 1 / (RRF_K + Number(row.rank)))
   }
 
+  // Liste triée par distance croissante : le premier est le plus proche.
+  const bestDistance = vectorRows.length ? Number(vectorRows[0].distance) : Infinity
+
   const ranked = [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_K)
 
-  if (ranked.length === 0) return []
+  if (ranked.length === 0) return { hits: [], bestDistance }
 
   const chunks = await prisma.knowledgeChunk.findMany({
     where: { id: { in: ranked.map(([id]) => id) } },
@@ -96,10 +117,12 @@ export async function hybridSearch(question: string): Promise<Hit[]> {
 
   const byId = new Map(chunks.map((c) => [c.id, c]))
 
-  return ranked
+  const hits = ranked
     .map(([id, score]) => {
       const c = byId.get(id)
       return c ? { ...c, score } : null
     })
     .filter(Boolean) as Hit[]
+
+  return { hits, bestDistance }
 }
