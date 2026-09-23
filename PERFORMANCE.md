@@ -191,3 +191,26 @@ Piège rencontré et corrigé : Redis sérialise en JSON, donc une `Date` revien
 un hit de cache. `getPublicExperiences()` ré-hydrate `startDate`/`endDate` après `cached()` ;
 sans cela, la page d'accueil plantait une requête sur deux (hit de cache → `.getFullYear()` sur
 une chaîne).
+
+---
+
+## Audit Lighthouse — production
+
+`npx lighthouse https://career-platform-pied.vercel.app/`, profil **mobile**, throttling
+simulé (4G lente, CPU ×4), 23/09/2026. Deux passages, les deux rapportés :
+
+| Passage | Performance | Accessibilité | Bonnes pratiques | SEO | FCP | LCP | TBT | CLS | Réponse serveur |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 46 | 100 | 96 | 100 | 9.2 s | 9.7 s | 370 ms | 0 | 1034 ms |
+| 2 (final) | **88** | **100** | **100** | **100** | 1.7 s | 1.7 s | 330 ms | 0.063 | 112 ms |
+
+**Écart entre les passages.** Au premier, le document racine a mis 1034 ms à répondre contre
+112 ms au second : démarrage à froid de la fonction serverless et cache Redis froid sur une
+page dynamique (profil, projets, expériences, compétences et services lus à chaque requête).
+Le seul échec « Bonnes pratiques » du premier passage était une erreur console — le 404 sur
+`/favicon.ico`, corrigé entre les deux passages (`app/icon.svg`).
+
+**Objectif non atteint.** La cible de 95 en performance n'est pas atteinte (88). Pistes non
+traitées dans le temps imparti : servir l'accueil en rendu statique régénéré à l'écriture
+(`revalidatePath` existe déjà) plutôt qu'en rendu dynamique, et réduire le JavaScript des
+deux composants client (TBT 330 ms).
