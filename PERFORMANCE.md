@@ -246,3 +246,18 @@ La page projet affiche la capture par `next/image` (`components/public/ProjectSh
 `width`/`height` issus du pipeline — l'espace est réservé, aucun décalage de mise en page — et
 `placeholder="blur"` sur le LQIP pendant le chargement. `next/image` produit lui-même les tailles
 responsives à partir du fichier 1200 px ; la variante 600 px sert aux usages hors `next/image`.
+
+### Après police Geist, portrait et captures (`bab7aeb`)
+
+Production, profil mobile, pages déjà chauffées (réponse serveur ~115 ms), 23/09/2026 :
+
+| Page | Performance | Accessibilité | Bonnes pratiques | SEO | FCP | LCP | TBT | CLS |
+|---|---|---|---|---|---|---|---|---|
+| Accueil | 79 | 100 | 100 | 100 | 1.9 s | 3.3 s | 440 ms | 0 |
+| `/travaux/koto-cosmetique` | 81 | 96 | 100 | 100 | 2.7 s | 3.4 s | 150 ms | 0 |
+
+L'accueil passe de 88 à 79 : le LCP monte de 1.7 s à 3.3 s avec l'arrivée du portrait en
+premier écran (préchargé, WebP optimisé par `next/image`), et le TBT de 330 à 440 ms. CLS
+nul sur les deux pages : `width`/`height` fixes et LQIP réservent l'espace des images.
+L'accessibilité à 96 de la page projet vient d'une liste de définitions (`<dl>`) dont les
+libellés sont des `<span>` et non des `<dt>` — antérieur aux images, non corrigé.
