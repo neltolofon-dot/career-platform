@@ -72,3 +72,28 @@ production : `perPage=999999` renvoie 400, pas une liste de 999999 lignes.
 Voir § Infrastructure ci-dessus. `bumpCacheVersion()` est appelée par `afterWrite()`, jamais
 directement par un transport — encore une conséquence de D11 : si l'invalidation vivait dans
 chaque route handler, l'oublier dans un seul suffirait à servir du contenu périmé.
+
+---
+
+## RAG
+
+### Bug trouvé — réindexation par entité, pas par chunk
+
+`upsertChunk()` (`lib/rag/index.ts`) supprimait les chunks existants par `(sourceType,
+sourceId)` **à l'intérieur de la boucle sur les chunks**, avant d'insérer le chunk courant.
+Or une même entité — un projet — produit jusqu'à 3 chunks (identité, résultats, détails
+techniques) partageant le même `sourceId`. Le 2e chunk d'un projet supprimait donc le 1er,
+tout juste inséré dans la même exécution ; le 3e supprimait le 2e. Résultat : `reindexAll()`
+rapportait 30 chunks « écrits », mais seulement 18 survivaient réellement en base — un seul
+chunk par projet au lieu de trois, sans la moindre erreur.
+
+C'est exactement le type de bug que ce module dénonce ailleurs (normalisation L2, `taskType`
+inversé) : le RAG « marche » et classe mal, silencieusement. Il n'a été découvert qu'en
+recomptant les lignes en base après indexation, pas en lisant les logs.
+
+**Correctif.** `reindexAll()` regroupe désormais les chunks par entité (`sourceType:sourceId`)
+avant de les traiter. `upsertEntityChunks()` reçoit tous les chunks d'une même entité, compare
+l'ensemble de leurs hash à l'existant (inchangé → aucun appel API, comme avant), et si l'un
+d'eux a changé, supprime **une seule fois** puis réinsère l'ensemble des chunks frais de cette
+entité. Vérifié après correction : 30 chunks écrits = 30 chunks en base ; un second run
+(contenu inchangé) rapporte 0 écrit / 30 ignorés, confirmant l'idempotence.

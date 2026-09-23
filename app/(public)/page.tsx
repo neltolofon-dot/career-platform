@@ -10,6 +10,13 @@ import { Opening } from '@/components/sections/opening/Opening'
 import { Works } from '@/components/sections/works/Works'
 import { Trajectory } from '@/components/sections/trajectory/Trajectory'
 import { Ground } from '@/components/sections/ground/Ground'
+import { Dialogue } from '@/components/sections/dialogue/Dialogue'
+
+const DIALOGUE_SUGGESTIONS = [
+  'Quels projets pour des clients réels ?',
+  'Quelle expérience en cybersécurité ?',
+  'Est-il disponible ?',
+]
 
 export async function generateMetadata(): Promise<Metadata> {
   const profile = await getPublicProfile()
@@ -33,9 +40,9 @@ export async function generateMetadata(): Promise<Metadata> {
  * les enchaîner en séquence ajouterait trois aller-retours inutiles au
  * temps de réponse (chacune touche Redis avant Postgres).
  *
- * Aucun sous-composant n'est un Client Component : les animations
- * d'entrée sont en CSS scroll-driven (classe .enter), donc la page
- * n'embarque pratiquement aucun JavaScript.
+ * Un seul sous-composant est un Client Component : ChatPanel (état de
+ * conversation, saisie, appel réseau). Toutes les animations d'entrée
+ * restent en CSS scroll-driven (classe .enter) sur le reste de la page.
  */
 export default async function HomePage() {
   const [profile, projects, experiences, skillGroups] = await Promise.all([
@@ -59,7 +66,8 @@ export default async function HomePage() {
       <Works projects={projects} />
       <Trajectory experiences={experiences} />
       <Ground groups={skillGroups} />
-      {/* 04 DIALOGUE et 05 CONTACT : blocs suivants */}
+      <Dialogue suggestions={DIALOGUE_SUGGESTIONS} />
+      {/* 05 CONTACT : bloc suivant */}
     </main>
   )
 }

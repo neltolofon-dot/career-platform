@@ -10,6 +10,7 @@
     "check": "node scripts/check-env.mjs",
     "verify:db": "node scripts/verify-db.mjs",
     "test:ratelimit": "node scripts/test-ratelimit.mjs",
+    "test:rag": "node scripts/test-rag.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

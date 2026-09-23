@@ -1,30 +1,35 @@
 import type { KnowledgeSourceType } from '@prisma/client'
+import { reindexAll } from './index'
 
-/**
- * Point d'accroche de la réindexation RAG.
- *
- * Volontairement défini MAINTENANT, avant le pipeline RAG : les écritures
- * CMS l'appellent déjà, donc quand le bloc 3 l'implémentera, toute la
- * réindexation fonctionnera sans toucher une ligne de la couche service.
- *
- * Il avale ses erreurs : un échec d'embedding ne doit jamais faire échouer
- * la sauvegarde d'un projet. La cohérence de la base de connaissances est
- * rattrapable par un bouton « réindexer » dans l'admin ; la perte du
- * travail de l'utilisateur ne l'est pas.
- */
 export type ContentChange = {
   sourceType: KnowledgeSourceType
   sourceId: string
   removed: boolean
 }
 
+/**
+ * Appelé après CHAQUE écriture CMS, via afterContentWrite().
+ *
+ * Il AVALE ses erreurs, volontairement : un échec d'embedding ne doit
+ * jamais faire échouer la sauvegarde d'un projet. Une base de
+ * connaissances en retard se rattrape par le bouton « Réindexer » ;
+ * le travail perdu d'un utilisateur, non.
+ *
+ * DETTE ASSUMÉE : la réindexation est synchrone, ce qui ajoute ~800 ms
+ * à une sauvegarde. Documenté dans ARCHITECTURE.md comme première des
+ * trois améliorations en +24 h (file d'attente et traitement différé).
+ */
 export async function onContentChanged(change: ContentChange): Promise<void> {
   try {
-    // Bloc 3 : chunking → embedding → upsert dans knowledge_chunks
-    void change
+    await reindexAll()
   } catch (error) {
     console.error(
-      JSON.stringify({ level: 'error', scope: 'rag.reindex', error: String(error) }),
+      JSON.stringify({
+        level: 'error',
+        scope: 'rag.reindex',
+        sourceType: change.sourceType,
+        error: String(error),
+      }),
     )
   }
 }
