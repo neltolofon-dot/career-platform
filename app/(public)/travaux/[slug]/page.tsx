@@ -130,7 +130,7 @@ export default async function ProjectPage({ params }: Params) {
 
         <hr className="rule" style={{ margin: 'var(--space-12) 0 var(--space-6)' }} />
         <Link href="/#travaux" className="mono">
-          ← Retour à l'index
+          ← Retour à l’index
         </Link>
       </SectionFrame>
     </main>

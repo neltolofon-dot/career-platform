@@ -40,7 +40,7 @@ export default async function AdminProjectsPage({
 
       {items.length === 0 ? (
         <p className="prose-body" style={{ color: 'var(--color-ink-muted)' }}>
-          Aucun projet pour l'instant. Commencez par en créer un.
+          Aucun projet pour l’instant. Commencez par en créer un.
         </p>
       ) : (
         <>

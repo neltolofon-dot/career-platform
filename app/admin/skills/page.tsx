@@ -40,7 +40,7 @@ export default async function AdminSkillsPage({
 
       {items.length === 0 ? (
         <p className="prose-body" style={{ color: 'var(--color-ink-muted)' }}>
-          Aucune compétence pour l'instant. Commencez par en créer une.
+          Aucune compétence pour l’instant. Commencez par en créer une.
         </p>
       ) : (
         <>

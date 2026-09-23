@@ -44,7 +44,7 @@ export default async function AdminExperiencesPage({
 
       {items.length === 0 ? (
         <p className="prose-body" style={{ color: 'var(--color-ink-muted)' }}>
-          Aucune expérience pour l'instant. Commencez par en créer une.
+          Aucune expérience pour l’instant. Commencez par en créer une.
         </p>
       ) : (
         <>
