@@ -26,8 +26,11 @@ export { ValidationError, ConflictError, NotFoundError }
 
 const WORDS_PER_MINUTE = 200
 
-/** Compte les mots par découpage sur les espaces — suffisant pour une estimation, pas un lexer. */
-function computeReadingMinutes(content: string): number {
+/**
+ * Exportée pour que prisma/seed.ts calcule le même temps de lecture sur le
+ * contenu réel — une seule formule, jamais deux copies de « 200 mots/minute ».
+ */
+export function computeReadingMinutes(content: string): number {
   const words = content.trim().split(/\s+/).filter(Boolean).length
   return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE))
 }
