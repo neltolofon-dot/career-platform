@@ -29,9 +29,17 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = profile.headline.replace(/\n/g, ' ')
 
   return {
+    // Nécessaire pour qu'og:image soit une URL ABSOLUE : les réseaux sociaux
+    // n'interprètent pas un chemin relatif.
+    metadataBase: new URL('https://career-platform-pied.vercel.app'),
     title: `${profile.fullName} — Développeur full-stack & sécurité`,
     description,
-    openGraph: { title: profile.fullName, description, type: 'profile' },
+    openGraph: {
+      title: profile.fullName,
+      description,
+      type: 'profile',
+      images: [{ url: '/images/portrait.webp', width: 800, height: 1067, alt: profile.fullName }],
+    },
   }
 }
 

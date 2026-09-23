@@ -11,6 +11,7 @@
     "verify:db": "node scripts/verify-db.mjs",
     "test:ratelimit": "node scripts/test-ratelimit.mjs",
     "test:rag": "node scripts/test-rag.mjs",
+    "images": "node scripts/optimize-images.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.8.0",
     "@vercel/speed-insights": "^2.0.0",
+    "geist": "^1.7.2",
     "next": "16.3.5",
     "prisma": "^6.19.3",
     "react": "19.2.8",

@@ -280,7 +280,7 @@ points structurants :
 | D4 | Notifications par version Redis, interrogée toutes les 10 s | WebSocket impossible en serverless ; SSE prévu mais coupé sous contrainte de temps ; la lecture de version évite toute requête Postgres à vide | WebSocket ; polling de Postgres |
 | D5 | Redis pour cinq usages (débit, cache, événements, verrou, sessions) | chaque usage a sa justification propre, préfixé par environnement | Redis limité au rate limiting |
 | D6 | Double rempart : verrou Redis + index unique **partiel** | le verrou est une optimisation, l'index est la garantie ; partiel pour qu'une annulation libère le créneau | verrou Redis seul (un invariant ne repose pas sur un cache) ; `UNIQUE` total (bloque le créneau après annulation) |
-| D7 | Uploads : magic bytes, allowlist, ré-encodage Sharp — **non livré** | le ré-encodage est la vraie sanitisation d'un fichier polyglotte | confiance dans l'extension ou le `Content-Type` |
+| D7 | Images : pipeline Sharp au build (WebP 1200/600 px + LQIP) ; upload utilisateur (magic bytes, allowlist) **non livré** | poids maîtrisé, aucun décalage de mise en page ; le ré-encodage reste la vraie sanitisation d'un futur upload | PNG bruts servis tels quels ; confiance dans l'extension ou le `Content-Type` |
 | D8 | Motion en CSS scroll-driven | 0 Ko de JS d'animation, sections restées Server Components | Framer Motion (~35 Ko gzip, `"use client"` partout) |
 | D9 | Pas de dark mode | l'identité repose sur un rapport encre/papier précis ; le temps est allé au RAG | toggle de thème |
 | D10 | Audience sans IP brute (hash à sel quotidien) — **non livré** | compter des visiteurs uniques sans pouvoir remonter à une personne | stockage de l'IP |

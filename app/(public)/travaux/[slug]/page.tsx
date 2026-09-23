@@ -5,6 +5,7 @@ import { getPublicProject, getPublicProjects } from '@/lib/services/public'
 import { SectionFrame } from '@/components/primitives/SectionFrame'
 import { Mono } from '@/components/primitives/Mono'
 import { Markdown } from '@/components/public/Markdown'
+import { ProjectShot } from '@/components/public/ProjectShot'
 
 type Params = { params: Promise<{ slug: string }> }
 
@@ -14,10 +15,8 @@ type Params = { params: Promise<{ slug: string }> }
  * chaque écriture admin, donc la fraîcheur est garantie sans rendu
  * à la demande.
  *
- * dynamicParams reste à true (défaut) : si la base est injoignable au
- * moment du build, on ne fait pas échouer tout le déploiement pour une
- * optimisation de pré-rendu — chaque slug est simplement rendu à la
- * demande au premier accès, au lieu d'être pré-généré.
+ * dynamicParams reste à true (défaut) : base injoignable au build → pas
+ * d'échec du déploiement, chaque slug est rendu à la demande au 1er accès.
  */
 export async function generateStaticParams() {
   try {
@@ -70,6 +69,8 @@ export default async function ProjectPage({ params }: Params) {
         >
           {project.summary}
         </p>
+
+        <ProjectShot slug={project.slug} title={project.title} />
 
         <hr className="rule" style={{ margin: 'var(--space-8) 0' }} />
 

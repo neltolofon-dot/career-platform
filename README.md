@@ -78,7 +78,7 @@ Un état partiel serait invisible et non rattrapable.
 | Cache / débit / verrous | Redis (Upstash, REST) |
 | Validation | Zod, côté serveur, sur toute entrée |
 | IA | Gemini — `gemini-embedding-001` (1536 dims) + cascade de modèles de chat |
-| Images | Sharp + `next/image` (dépendances en place ; pipeline d'upload non livré, voir Limites) |
+| Images | Sharp (pipeline `npm run images` : WebP 2 tailles + LQIP) + `next/image` |
 | Auth | Maison — Argon2id, sessions opaques, RBAC |
 | Hébergement | Vercel, déploiement automatique sur `git push` |
 
@@ -171,8 +171,9 @@ Assumées et documentées, pas découvertes après coup :
    visiteur, faute de service d'envoi dans le temps imparti.
 6. **Tier gratuit Gemini instable** — les 503 sont fréquents. Une cascade de
    modèles les absorbe, un 503 explicite est renvoyé en dernier recours.
-7. **Upload de médias non livré** — le pipeline prévu (magic bytes, allowlist,
-   ré-encodage Sharp, nom généré) n'a pas été implémenté ; aucune route n'accepte
-   de fichier.
+7. **Upload depuis l'admin non livré** — les images du portfolio passent par un
+   pipeline Sharp au build (`npm run images`, voir PERFORMANCE.md), mais aucune route
+   n'accepte encore de fichier envoyé par un utilisateur : les contrôles prévus pour
+   un upload (magic bytes, allowlist, nom généré) n'ont donc pas d'objet.
 8. **Mesure d'audience non livrée** — le modèle `PageView` et son schéma sans IP
    brute existent, mais aucune visite n'est encore enregistrée.

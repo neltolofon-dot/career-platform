@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { SectionFrame } from '@/components/primitives/SectionFrame'
 import { RevealLines } from '@/components/primitives/RevealLines'
 import { OpeningMeta } from './OpeningMeta'
@@ -13,12 +14,13 @@ type OpeningProps = {
 /**
  * Mouvement 00 — OUVERTURE.
  *
- * Une déclaration typographique, un filet, une ligne de métadonnées
- * VIVANTES lues en base.
+ * Une déclaration typographique, le portrait, un filet, une ligne de
+ * métadonnées VIVANTES lues en base.
  *
- * Pas de photo, pas de « Hello I'm », pas de bouton « Télécharger mon CV ».
- * Les métadonnées sont la première preuve que le site est branché sur une
- * base de données et pilotable depuis /admin.
+ * Pas de « Hello I'm », pas de bouton « Télécharger mon CV ». Le fond vert
+ * du portrait reprend l'accent du site : c'est le lien entre l'identité
+ * visuelle et la personne. Les métadonnées sont la première preuve que le
+ * site est branché sur une base de données et pilotable depuis /admin.
  */
 export function Opening({
   headline,
@@ -35,9 +37,25 @@ export function Opening({
       anchor="1-11"
       className="enter"
     >
-      <h1 className="display display--statement">
-        <RevealLines text={headline} />
-      </h1>
+      <div className="opening">
+        {/* width/height fixes : l'espace est réservé avant le chargement,
+            aucun décalage de mise en page. preload remplace `priority`,
+            déprécié en Next 16 : l'image est au-dessus de la ligne de flottaison. */}
+        <div className="opening__portrait">
+          <Image
+            src="/images/portrait.webp"
+            alt="Suhrago Nelkaël Tolofon"
+            width={800}
+            height={1067}
+            preload
+            sizes="(min-width: 64rem) 18rem, 180px"
+          />
+        </div>
+
+        <h1 className="display display--statement opening__title">
+          <RevealLines text={headline} />
+        </h1>
+      </div>
 
       <hr className="rule" style={{ margin: 'var(--space-12) 0 var(--space-6)' }} />
 

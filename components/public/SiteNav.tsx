@@ -17,6 +17,9 @@ const SECTIONS = [
 ] as const
 
 export function SiteNav({ name }: { name: string }) {
+  // Sous 640 px, le nom complet touche les numéros : on retire le premier prénom.
+  const shortName = name.split(' ').slice(1).join(' ') || name
+
   return (
     <header
       style={{
@@ -26,13 +29,15 @@ export function SiteNav({ name }: { name: string }) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 'var(--space-6)',
         padding: 'var(--space-3) var(--gutter)',
         borderBottom: 'var(--rule-width) solid var(--color-rule)',
         background: 'var(--color-paper)',
       }}
     >
-      <Link href="/" className="mono" style={{ textDecoration: 'none' }}>
-        {name}
+      <Link href="/" className="mono" style={{ textDecoration: 'none' }} aria-label={name}>
+        <span className="site-nav__name">{name}</span>
+        <span className="site-nav__name-short" aria-hidden="true">{shortName}</span>
       </Link>
 
       <nav aria-label="Sections" style={{ display: 'flex', gap: 'var(--space-4)' }}>

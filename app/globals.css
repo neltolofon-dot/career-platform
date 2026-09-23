@@ -31,8 +31,8 @@
   --color-negative:   #FF5C5C;   /* erreurs — le vert ne peut pas signaler l'échec */
 
   /* --- Typographie (inchangée) ------------------------------------------ */
-  --font-display: var(--font-fraunces), Georgia, serif;
-  --font-body:    var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-geist-sans), system-ui, sans-serif;
+  --font-body:    var(--font-geist-sans), system-ui, sans-serif;
   --font-mono:    var(--font-geist-mono), ui-monospace, monospace;
 
   --text-2xs:  0.6875rem;
@@ -43,7 +43,7 @@
   --text-xl:   1.875rem;
   --text-2xl:  2.5rem;
   --text-3xl:  clamp(3rem, 7vw, 5.5rem);
-  --text-4xl:  clamp(4rem, 13vw, 11rem);
+  --text-4xl:  clamp(2.6rem, 5.5vw, 5rem);   /* mesuré : déclaration entière visible en 1366×768 et 390×844 */
 
   --leading-display: 0.92;
   --leading-tight:   1.15;
@@ -241,10 +241,9 @@ a.mono:hover::before, a.mono:focus-visible::before {
 
 .display {
   font-family: var(--font-display);
-  font-variation-settings: "SOFT" 0, "WONK" 1, "opsz" 144;
-  font-weight: 400;
-  line-height: var(--leading-display);
-  letter-spacing: var(--tracking-display);
+  font-weight: 560;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
   text-wrap: balance;
 }
 
@@ -332,6 +331,48 @@ table, .tabular { font-variant-numeric: tabular-nums; }
   [data-anchor="5-12"]  .section__body { grid-column: 6  / span 8;  }
 }
 
+/* Ouverture : portrait AU-DESSUS du titre sur mobile (ordre du DOM),
+   dans une colonne à DROITE du titre sur desktop (placement de grille). */
+.opening { display: grid; gap: var(--space-6); }
+
+.opening__portrait { width: 100%; max-width: 180px; }
+
+.opening__portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border: var(--rule-width) solid var(--color-rule);
+}
+
+@media (min-width: 64rem) {
+  .opening {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    column-gap: var(--space-12);
+    align-items: start;
+  }
+  .opening__title    { grid-column: 1; grid-row: 1; }
+  .opening__portrait { grid-column: 2; grid-row: 1; max-width: none; }
+}
+
+/* Barre de navigation : nom raccourci sous 640 px, sinon il touche les numéros. */
+.site-nav__name-short { display: none; }
+
+@media (max-width: 39.99rem) {
+  .site-nav__name       { display: none; }
+  .site-nav__name-short { display: inline; }
+}
+
+/* Capture d'un projet (page /travaux/[slug]) : filet 1px, aucun arrondi. */
+.project-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: var(--space-8);
+  border: var(--rule-width) solid var(--color-rule);
+}
+
 /* --------------------------------------------------------------------------
    6. FILETS ET TABLES
    -------------------------------------------------------------------------- */
@@ -357,7 +398,8 @@ table, .tabular { font-variant-numeric: tabular-nums; }
 
 .index-row__title {
   font-family: var(--font-display);
-  font-variation-settings: "SOFT" 0, "WONK" 1, "opsz" 48;
+  font-weight: 540;
+  letter-spacing: -0.02em;
   font-size: var(--text-xl);
   line-height: var(--leading-tight);
   background-image: none !important;   /* pas de double soulignement */

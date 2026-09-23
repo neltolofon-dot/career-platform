@@ -214,3 +214,35 @@ Le seul échec « Bonnes pratiques » du premier passage était une erreur conso
 traitées dans le temps imparti : servir l'accueil en rendu statique régénéré à l'écriture
 (`revalidatePath` existe déjà) plutôt qu'en rendu dynamique, et réduire le JavaScript des
 deux composants client (TBT 330 ms).
+
+---
+
+## Pipeline d'images des projets
+
+`npm run images` (`scripts/optimize-images.mjs`) :
+
+```
+assets/raw/<slug>.png  (capture pleine page, non versionnée)
+   └─ Sharp : premier écran recadré en 16:10 depuis le haut
+        ├─ public/images/projects/<slug>.webp     1200 px, qualité 80
+        ├─ public/images/projects/<slug>-sm.webp   600 px, qualité 80
+        └─ LQIP 20 px, base64  →  lib/project-images.ts (slug → width, height, blurDataURL)
+```
+
+Les captures sources sont des pages entières (1909 à 7831 px de haut) : servies telles
+quelles, une seule aurait dépassé 5 900 px de haut à 1200 px de large. Le premier écran est ce
+qu'un visiteur voit du site. Poids mesurés :
+
+| Projet | Source PNG | WebP 1200 px | WebP 600 px | LQIP |
+|---|---|---|---|---|
+| genie-metal-plus | 1468 Ko | 60.3 Ko | 25.4 Ko | 144 o |
+| mydayplanner | 191 Ko | 24.6 Ko | 9.7 Ko | 96 o |
+| thm-roadmap | 512 Ko | 26.5 Ko | 9.1 Ko | 88 o |
+| koto-cosmetique | 4664 Ko | 53.1 Ko | 18.9 Ko | 154 o |
+| fruita | 2461 Ko | 51.2 Ko | 18.7 Ko | 154 o |
+| hashvault | 282 Ko | 27.1 Ko | 11.7 Ko | 108 o |
+
+La page projet affiche la capture par `next/image` (`components/public/ProjectShot.tsx`) avec
+`width`/`height` issus du pipeline — l'espace est réservé, aucun décalage de mise en page — et
+`placeholder="blur"` sur le LQIP pendant le chargement. `next/image` produit lui-même les tailles
+responsives à partir du fichier 1200 px ; la variante 600 px sert aux usages hors `next/image`.
