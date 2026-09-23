@@ -4,9 +4,7 @@
 // Avec ContactForm, l'un des deux seuls composants client de l'accueil.
 
 import { useState, useRef } from 'react'
-
-type Citation = { title: string; sourceType: string; sourceId: string }
-type Msg = { role: 'user' | 'assistant'; text: string; citations?: Citation[]; refused?: boolean }
+import { ChatMessage, type Msg } from './ChatMessage'
 
 export function ChatPanel({ suggestions }: { suggestions: string[] }) {
   const [messages, setMessages] = useState<Msg[]>([])
@@ -32,7 +30,11 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
       if (!res.ok) {
         setMessages((m) => [
           ...m,
-          { role: 'assistant', text: data.error ?? 'Une erreur est survenue.' },
+          {
+            role: 'assistant',
+            text: data.error ?? 'Une erreur est survenue.',
+            status: data.retryable ? 'unavailable' : 'error',
+          },
         ])
         return
       }
@@ -43,7 +45,7 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
         { role: 'assistant', text: data.answer, citations: data.citations, refused: data.refused },
       ])
     } catch {
-      setMessages((m) => [...m, { role: 'assistant', text: 'Connexion impossible.' }])
+      setMessages((m) => [...m, { role: 'assistant', text: 'Connexion impossible.', status: 'error' }])
     } finally {
       setPending(false)
     }
@@ -54,37 +56,7 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
       {messages.length > 0 && (
         <div style={{ marginBottom: 'var(--space-6)' }}>
           {messages.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                paddingBlock: 'var(--space-4)',
-                borderTop: 'var(--rule-width) solid var(--color-rule)',
-              }}
-            >
-              <span className="mono">{m.role === 'user' ? 'Vous' : 'Assistant'}</span>
-              <p className="prose-body" style={{ marginTop: 'var(--space-2)' }}>
-                {m.text}
-              </p>
-
-              {/* Les sources sont la PREUVE VISUELLE que le RAG est réel.
-                  Un auditeur qui voit une réponse sourcée et cliquable
-                  n'a plus besoin de demander si le chatbot est truqué. */}
-              {m.citations && m.citations.length > 0 && (
-                <p className="mono" style={{ marginTop: 'var(--space-3)' }}>
-                  Sources ·{' '}
-                  {m.citations.map((c, j) => (
-                    <span key={j}>
-                      {j > 0 && ' · '}
-                      {c.sourceType === 'PROJECT' ? (
-                        <a href={`/travaux/${c.sourceId}`}>{c.title}</a>
-                      ) : (
-                        c.title
-                      )}
-                    </span>
-                  ))}
-                </p>
-              )}
-            </div>
+            <ChatMessage key={i} message={m} />
           ))}
         </div>
       )}

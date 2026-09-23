@@ -75,7 +75,23 @@ chaque route handler, l'oublier dans un seul suffirait à servir du contenu pér
 
 ---
 
-## RAG
+## IA
+
+### Cascade de modèles Gemini
+
+Le tier gratuit Gemini renvoie des 503 par intermittence. Quatre modèles ont été mesurés le
+23/09 : tous les flash-lite en 503, gemini-3.5-flash répondant en 22 s. Une cascade bascule sur
+le modèle suivant dès le premier 503, sans attente, dans un budget de 45 s. En dernier recours,
+l'API renvoie un 503 explicite plutôt qu'une erreur générique — une indisponibilité amont n'est
+pas un défaut applicatif.
+
+Mise en œuvre (`lib/rag/answer.ts`, `generateWithFallback`) : ordre `gemini-3.5-flash` →
+`gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-3.8-flash`. Le SDK ne relance
+jamais de lui-même (`retryOptions: { attempts: 1 }` explicite) et chaque appel reçoit comme
+timeout le budget **restant**, pas un budget par modèle. Chaque bascule est journalisée
+(`{ level: 'warn', scope: 'chat.fallback', from, to, status }`). Si tout échoue,
+`ModelUnavailableError` → `app/api/chat/route.ts` renvoie `503` avec `retryable: true`, que
+l'interface affiche comme « Assistant · indisponible », distinct d'une erreur technique.
 
 ### Bug trouvé — réindexation par entité, pas par chunk
 

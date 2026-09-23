@@ -74,6 +74,10 @@ que spécifié. Documenté ici plutôt que corrigé silencieusement — une late
 prompt d'un mot reste un signal à surveiller, pas un problème résolu par un simple relèvement
 de plafond.
 
+**Mise à jour.** Nouvelle mesure le même jour : les modèles flash-lite renvoient des 503 (« high
+demand »), `gemini-3.5-flash` répond en 22 s. Le modèle unique a été remplacé par une cascade
+de quatre modèles dans un budget de 45 s — voir ARCHITECTURE.md § IA.
+
 ---
 
 ## Calibrage du seuil de pertinence

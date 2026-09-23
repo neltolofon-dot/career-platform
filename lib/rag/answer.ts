@@ -1,8 +1,33 @@
-import { GoogleGenAI } from '@google/genai'
+import { ApiError, GoogleGenAI } from '@google/genai'
+import { prisma } from '@/lib/prisma'
 import { hybridSearch, RELEVANCE_THRESHOLD, type Hit } from './search'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-const CHAT_MODEL = 'gemini-3.5-flash-lite'
+
+/**
+ * Cascade de modèles, ordonnée par mesure (23/09) : le tier gratuit renvoie
+ * des 503 par intermittence ; seul gemini-3.5-flash a répondu (22 s).
+ * Sur 503 ou 429, on passe IMMÉDIATEMENT au suivant.
+ */
+const CHAT_MODELS = [
+  'gemini-3.5-flash', // seul modèle ayant répondu (22 s)
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.8-flash',
+]
+
+// maxDuration de la route = 60 s : il faut garder de la marge pour
+// l'embedding et la recherche hybride, faits AVANT la génération.
+const GENERATION_BUDGET_MS = 45_000
+const FALLBACK_STATUSES = new Set([429, 503])
+
+/** Tous les modèles ont échoué (503/429) ou le budget est épuisé. */
+export class ModelUnavailableError extends Error {
+  constructor() {
+    super('Aucun modèle de chat disponible dans le budget imparti')
+    this.name = 'ModelUnavailableError'
+  }
+}
 
 export const REFUSAL =
   "Je n'ai pas cette information dans les données publiques du candidat."
@@ -20,7 +45,13 @@ export const MAX_COSINE_DISTANCE = 0.36
 
 export type Answer = {
   text: string
-  citations: { title: string; sourceType: string; sourceId: string; score: number }[]
+  citations: {
+    title: string
+    sourceType: string
+    sourceId: string
+    score: number
+    href: string | null
+  }[]
   refused: boolean
 }
 
@@ -62,6 +93,58 @@ ${context}
 Question du visiteur : ${question}`
 }
 
+async function generateWithFallback(contents: string): Promise<string | undefined> {
+  const deadline = Date.now() + GENERATION_BUDGET_MS
+
+  for (let i = 0; i < CHAT_MODELS.length; i++) {
+    const model = CHAT_MODELS[i]
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) break
+
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          temperature: 0.2, // bas : on veut de la restitution, pas de la créativité
+          maxOutputTokens: 400,
+          // timeout = budget RESTANT, pas un budget par modèle. attempts: 1
+          // désactive toute relance interne : sur 503 on bascule tout de
+          // suite au modèle suivant au lieu d'attendre un backoff.
+          httpOptions: { timeout: remaining, retryOptions: { attempts: 1 } },
+        },
+      })
+      return res.text
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : null
+      const budgetExhausted = Date.now() >= deadline
+
+      if (budgetExhausted || (status !== null && FALLBACK_STATUSES.has(status))) {
+        // Chaque bascule est journalisée : c'est la preuve que la cascade
+        // a fonctionné en production, pas seulement en théorie.
+        console.warn(
+          JSON.stringify({
+            level: 'warn',
+            scope: 'chat.fallback',
+            from: model,
+            to: budgetExhausted ? null : (CHAT_MODELS[i + 1] ?? null),
+            status: budgetExhausted ? 'timeout' : status,
+          }),
+        )
+        if (budgetExhausted) break
+        continue
+      }
+
+      // Erreur non liée à la disponibilité amont (400, 404…) : c'est un
+      // défaut à corriger, pas une panne à contourner.
+      throw error
+    }
+  }
+
+  throw new ModelUnavailableError()
+}
+
 export async function answerQuestion(question: string): Promise<Answer> {
   const { hits, bestDistance } = await hybridSearch(question)
 
@@ -87,33 +170,43 @@ export async function answerQuestion(question: string): Promise<Answer> {
     return { text: REFUSAL, citations: [], refused: true }
   }
 
-  const res = await ai.models.generateContent({
-    model: CHAT_MODEL,
-    contents: buildPrompt(question, hits),
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      temperature: 0.2, // bas : on veut de la restitution, pas de la créativité
-      maxOutputTokens: 400,
-    },
-  })
+  const generated = await generateWithFallback(buildPrompt(question, hits))
 
-  const text = (res.text ?? REFUSAL).trim()
+  const text = (generated ?? REFUSAL).trim()
 
   // Contrôle de sortie : si le modèle a refusé malgré un contexte trouvé,
   // on n'affiche pas de sources — elles donneraient une fausse impression
   // de réponse fondée.
   const refused = text.includes(REFUSAL)
+  if (refused) return { text: text.slice(0, 2000), refused, citations: [] }
+
+  // Un chunk PROJECT porte l'ID du projet (clé stable de réindexation),
+  // mais la page publique est adressée par SLUG : sans cette résolution,
+  // chaque source cliquable mène à une 404.
+  const projectIds = hits.filter((h) => h.sourceType === 'PROJECT').map((h) => h.sourceId)
+  const slugById = new Map(
+    projectIds.length
+      ? (
+          await prisma.project.findMany({
+            where: { id: { in: projectIds }, status: 'PUBLISHED' },
+            select: { id: true, slug: true },
+          })
+        ).map((p) => [p.id, p.slug])
+      : [],
+  )
 
   return {
     text: text.slice(0, 2000),
     refused,
-    citations: refused
-      ? []
-      : hits.map((h) => ({
-          title: h.title,
-          sourceType: h.sourceType,
-          sourceId: h.sourceId,
-          score: Number(h.score.toFixed(4)),
-        })),
+    citations: hits.map((h) => {
+      const slug = h.sourceType === 'PROJECT' ? slugById.get(h.sourceId) : undefined
+      return {
+        title: h.title,
+        sourceType: h.sourceType,
+        sourceId: h.sourceId,
+        score: Number(h.score.toFixed(4)),
+        href: slug ? `/travaux/${slug}` : null,
+      }
+    }),
   }
 }

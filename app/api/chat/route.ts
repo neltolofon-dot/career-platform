@@ -2,7 +2,7 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { redis } from '@/lib/redis'
 import { prisma } from '@/lib/prisma'
 import { chatSchema } from '@/lib/validation/chat'
-import { answerQuestion } from '@/lib/rag/answer'
+import { answerQuestion, ModelUnavailableError } from '@/lib/rag/answer'
 import { getClientIpHash } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -103,6 +103,18 @@ export async function POST(request: Request) {
       sessionId: chatSession.id,
     })
   } catch (error) {
+    // 503 et non 500 : une indisponibilité amont (Gemini) n'est pas un
+    // défaut applicatif. retryable indique au client qu'il peut réessayer.
+    if (error instanceof ModelUnavailableError) {
+      return Response.json(
+        {
+          error: "L'assistant est momentanément indisponible. Réessayez dans quelques instants.",
+          retryable: true,
+        },
+        { status: 503 },
+      )
+    }
+
     const ref = crypto.randomUUID()
     console.error(JSON.stringify({ level: 'error', scope: 'chat', ref, error: String(error) }))
     return Response.json(

@@ -7,7 +7,10 @@ export const contactSchema = z.object({
   message: z.string().trim().min(20).max(4000),
   // Champ piège : invisible pour un humain, rempli par les robots.
   // Anti-spam à coût nul, sans CAPTCHA ni service tiers.
-  website: z.string().max(0).optional(),
+  // Accepte toute valeur : c'est submitContact() qui la détecte et répond
+  // 201 sans écrire. Un .max(0) ici renverrait un 422 nommant `website` —
+  // soit exactement l'indice qui apprend au robot où est le piège.
+  website: z.string().optional(),
 })
 
 export type ContactInput = z.infer<typeof contactSchema>
