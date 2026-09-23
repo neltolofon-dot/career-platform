@@ -27,14 +27,22 @@ for (const t of TESTS) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question: t.q }),
   })
-  const data = await res.json()
+  // Vercel renvoie une page texte (pas du JSON) sur un timeout de fonction :
+  // on le signale au lieu de faire planter tout le script.
+  const raw = await res.text()
+  let data
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    data = { error: `réponse non-JSON (${res.headers.get('x-vercel-error') ?? raw.slice(0, 60)})` }
+  }
 
-  // Une erreur HTTP (429, 500) n'a pas de champ `refused` : sans ce cas,
+  // Une erreur HTTP (429, 500, 504) n'a pas de champ `refused` : sans ce cas,
   // elle serait comptée comme une réponse et afficherait ✓ à tort.
   const got = !res.ok ? `erreur ${res.status}` : data.refused ? 'refusal' : 'answer'
   const ok = got === t.expect
 
-  console.log(`\n${ok ? '✓' : '✗'} [${t.expect}] ${t.q}`)
+  console.log(`\n${ok ? '✓' : '✗'} [${t.expect}] ${t.q}${ok ? '' : `  (obtenu : ${got})`}`)
   console.log(`  → ${data.answer ?? data.error}`)
   if (data.citations?.length) {
     console.log(`  → sources : ${data.citations.map((c) => `${c.title} (${c.score})`).join(', ')}`)
