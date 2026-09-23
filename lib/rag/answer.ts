@@ -8,20 +8,24 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
  * Cascade de modèles, ordonnée par mesure (23/09) : le tier gratuit renvoie
  * des 503 par intermittence ; seul gemini-3.5-flash a répondu (22 s).
  * Sur 503 ou 429, on passe IMMÉDIATEMENT au suivant.
+ *
+ * DEUX modèles, pas quatre : seuls ceux-ci ont répondu au moins une fois le
+ * 23/09 et ont une configuration VÉRIFIÉE. gemini-3.1-flash-lite et
+ * gemini-3.8-flash n'ont jamais répondu (toujours 503/429) : ils n'apportaient
+ * aucune disponibilité mesurée, seulement le risque d'un 400 sur une config
+ * non vérifiable — hypothèse retenue pour les 500 observés en production.
  */
 //
 // Configuration de raisonnement PAR MODÈLE, mesurée (voir PERFORMANCE.md) :
-// les flash raisonnent par défaut et mangent le budget de sortie (réponse
-// tronquée) -> thinkingLevel MINIMAL. Les flash-lite ne raisonnent pas par
-// défaut, et gemini-3.5-flash-lite REJETTE thinkingBudget: 0 (400) -> on
-// n'envoie rien : un paramètre absent ne peut pas être invalide.
+// gemini-3.5-flash raisonne par défaut et mange le budget de sortie (réponse
+// tronquée) -> thinkingLevel MINIMAL. gemini-3.5-flash-lite ne raisonne pas
+// par défaut et REJETTE thinkingBudget: 0 (400) -> on n'envoie rien : un
+// paramètre absent ne peut pas être invalide.
 const MINIMAL: ThinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL }
 
 const CHAT_MODELS: { model: string; thinking?: ThinkingConfig }[] = [
   { model: 'gemini-3.5-flash', thinking: MINIMAL }, // seul modèle ayant répondu (22 s)
   { model: 'gemini-3.5-flash-lite' },
-  { model: 'gemini-3.1-flash-lite' },
-  { model: 'gemini-3.8-flash', thinking: MINIMAL },
 ]
 
 // maxDuration de la route = 60 s : il faut garder de la marge pour

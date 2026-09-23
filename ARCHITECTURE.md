@@ -86,7 +86,7 @@ l'API renvoie un 503 explicite plutôt qu'une erreur générique — une indispo
 pas un défaut applicatif.
 
 Mise en œuvre (`lib/rag/answer.ts`, `generateWithFallback`) : ordre `gemini-3.5-flash` →
-`gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-3.8-flash`. Le SDK ne relance
+`gemini-3.5-flash-lite`. Le SDK ne relance
 jamais de lui-même (`retryOptions: { attempts: 1 }` explicite) et chaque appel reçoit comme
 timeout le budget **restant**, pas un budget par modèle. Chaque bascule est journalisée
 (`{ level: 'warn', scope: 'chat.fallback', from, to, status }`). Si tout échoue,
@@ -99,6 +99,16 @@ invalide de notre part. C'est ce choix qui a permis de trouver que `gemini-3.5-f
 rejette `thinkingBudget: 0` (400) ; une cascade qui avalerait les 4xx l'aurait masqué derrière
 un « service indisponible ». D'où une configuration de raisonnement par modèle
 (PERFORMANCE.md § Latence Gemini).
+
+**Pourquoi deux modèles et pas quatre.** La cascade a d'abord compté quatre modèles. En local,
+elle répondait 4 fois sur 4 (bascule de 3.5-flash vers 3.5-flash-lite, visible dans les logs) ;
+en production, `test:rag` renvoyait encore des 500. Hypothèse : sous plus de charge, la
+production descend plus bas dans la cascade, jusqu'à `gemini-3.1-flash-lite` et
+`gemini-3.8-flash` — les deux seuls modèles dont la configuration n'a jamais pu être vérifiée,
+et qui n'ont **jamais** répondu de la journée (toujours 503/429). Ils n'apportaient aucune
+disponibilité mesurée, seulement le risque d'un 400. La cascade ne garde que les deux modèles
+qui ont répondu et dont la configuration est mesurée ; au-delà, le 503 explicite fait son
+travail.
 
 ### Bug trouvé — réindexation par entité, pas par chunk
 

@@ -76,7 +76,8 @@ de plafond.
 
 **Mise à jour.** Nouvelle mesure le même jour : les modèles flash-lite renvoient des 503 (« high
 demand »), `gemini-3.5-flash` répond en 22 s. Le modèle unique a été remplacé par une cascade
-de quatre modèles dans un budget de 45 s — voir ARCHITECTURE.md § IA.
+de modèles dans un budget de 45 s — quatre au départ, réduite à deux (les seuls ayant répondu,
+à configuration vérifiée) : voir ARCHITECTURE.md § IA.
 
 **Réponses tronquées — le raisonnement interne mangeait le budget de sortie.** En production,
 les réponses s'arrêtaient au milieu d'une phrase (« …a développé un »). Mesuré sur
