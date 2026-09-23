@@ -1,18 +1,6 @@
 import { SectionFrame } from '@/components/primitives/SectionFrame'
 import { ChatPanel } from './ChatPanel'
 
-/**
- * Mouvement 04 — DIALOGUE.
- *
- * ┌────────────────────────────────────────────────────────────────────┐
- * │  PAS DE BULLE FLOTTANTE EN BAS À DROITE.                           │
- * │                                                                    │
- * │  C'est le cliché absolu, et il enterre sous un widget que personne │
- * │  ne clique le module qui vaut le plus de points.                   │
- * │                                                                    │
- * │  Le chatbot est une SECTION à part entière du parcours de lecture. │
- * └────────────────────────────────────────────────────────────────────┘
- */
 export function Dialogue({ suggestions }: { suggestions: string[] }) {
   return (
     <SectionFrame
@@ -22,12 +10,16 @@ export function Dialogue({ suggestions }: { suggestions: string[] }) {
       anchor="2-9"
       className="enter"
     >
-      <h2 className="display display--section">L’assistant répond sur mon travail</h2>
-
-      <p className="prose-body" style={{ marginTop: 'var(--space-4)' }}>
-        Posez-lui une question. Il ne répond qu’à partir des données de ce
-        site, cite ses sources, et refuse quand l’information n’y est pas.
-      </p>
+      <div className="section-heading section-heading--compact">
+        <div>
+          <p className="section-kicker mono">Portfolio interrogeable</p>
+          <h2 className="display display--section">L’assistant répond sur mon travail.</h2>
+        </div>
+        <p className="section-heading__intro">
+          Posez une question : il répond uniquement à partir des données du site,
+          cite ses sources et refuse quand l’information manque.
+        </p>
+      </div>
 
       <ChatPanel suggestions={suggestions} />
     </SectionFrame>

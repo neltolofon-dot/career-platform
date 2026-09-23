@@ -83,7 +83,7 @@ export default async function HomePage({
   const totalProjects = domains.reduce((n, d) => n + d.count, 0)
 
   return (
-    <main>
+    <main className="public-main">
       <Opening
         headline={profile.headline}
         availability={profile.availability}

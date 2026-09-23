@@ -12,15 +12,8 @@ type Experience = {
   highlights: string[]
 }
 
-/**
- * Mouvement 02 — TRAJECTOIRE.
- *
- * Chronologie en deux colonnes, séparées par un filet vertical qui fait
- * office d'axe. Pas de « timeline » à pastilles rondes et connecteurs
- * arrondis : le filet 1px suffit à porter la continuité.
- */
 export function Trajectory({ experiences }: { experiences: Experience[] }) {
-  const years = experiences.map((e) => e.startDate.getFullYear())
+  const years = experiences.map((experience) => experience.startDate.getFullYear())
   const span = years.length ? `${Math.min(...years)} — aujourd'hui` : ''
 
   return (
@@ -31,13 +24,19 @@ export function Trajectory({ experiences }: { experiences: Experience[] }) {
       anchor="3-10"
       className="enter"
     >
-      <h2 className="display display--section" style={{ marginBottom: 'var(--space-8)' }}>
-        Trajectoire
-      </h2>
+      <div className="section-heading section-heading--compact">
+        <div>
+          <p className="section-kicker mono">Depuis 2021</p>
+          <h2 className="display display--section">Une trajectoire construite sur le terrain.</h2>
+        </div>
+        <p className="section-heading__intro">
+          Du support informatique au développement full-stack, avec la sécurité comme fil conducteur.
+        </p>
+      </div>
 
-      <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {experiences.map((exp) => (
-          <TrajectoryEntry key={`${exp.org}-${exp.role}`} experience={exp} />
+      <ol className="trajectory-list">
+        {experiences.map((experience) => (
+          <TrajectoryEntry key={`${experience.org}-${experience.role}`} experience={experience} />
         ))}
       </ol>
     </SectionFrame>

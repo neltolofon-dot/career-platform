@@ -22,62 +22,23 @@ export function TrajectoryEntry({ experience }: { experience: Experience }) {
       : ''
 
   return (
-    <li
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(7rem, 9rem) 1fr',
-        gap: 'var(--space-6)',
-        paddingBlock: 'var(--space-8)',
-        borderTop: 'var(--rule-width) solid var(--color-rule)',
-      }}
-    >
-      <div>
-        <Mono>
-          {start} — {end}
-        </Mono>
-        {experience.location && (
-          <div style={{ marginTop: 'var(--space-1)' }}>
-            <Mono>{experience.location}</Mono>
-          </div>
-        )}
+    <li className="trajectory-entry">
+      <div className="trajectory-entry__meta">
+        <Mono>{start} — {end}</Mono>
+        {experience.location && <Mono>{experience.location}</Mono>}
       </div>
 
-      <div>
-        <h3 style={{ fontSize: 'var(--text-xl)', lineHeight: 'var(--leading-tight)' }}>
-          {experience.role}
-        </h3>
-        <div style={{ marginTop: 'var(--space-1)' }}>
-          <Mono data>{experience.org}</Mono>
-        </div>
+      <div className="trajectory-entry__content">
+        <h3 className="trajectory-entry__title display">{experience.role}</h3>
+        <Mono data>{experience.org}</Mono>
 
         {experience.summary && (
-          <p className="prose-body" style={{ marginTop: 'var(--space-4)' }}>
-            {experience.summary}
-          </p>
+          <p className="prose-body trajectory-entry__summary">{experience.summary}</p>
         )}
 
         {experience.highlights.length > 0 && (
-          <ul
-            style={{
-              marginTop: 'var(--space-4)',
-              paddingLeft: 0,
-              listStyle: 'none',
-              maxWidth: 'var(--measure)',
-            }}
-          >
-            {experience.highlights.map((h) => (
-              <li
-                key={h}
-                style={{
-                  paddingLeft: 'var(--space-4)',
-                  borderLeft: 'var(--rule-width) solid var(--color-rule)',
-                  marginBottom: 'var(--space-2)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                {h}
-              </li>
-            ))}
+          <ul className="trajectory-entry__highlights">
+            {experience.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}
           </ul>
         )}
       </div>

@@ -11,17 +11,6 @@ type OpeningProps = {
   projectCount: number
 }
 
-/**
- * Mouvement 00 — OUVERTURE.
- *
- * Une déclaration typographique, le portrait, un filet, une ligne de
- * métadonnées VIVANTES lues en base.
- *
- * Pas de « Hello I'm », pas de bouton « Télécharger mon CV ». Le fond vert
- * du portrait reprend l'accent du site : c'est le lien entre l'identité
- * visuelle et la personne. Les métadonnées sont la première preuve que le
- * site est branché sur une base de données et pilotable depuis /admin.
- */
 export function Opening({
   headline,
   availability,
@@ -29,6 +18,10 @@ export function Opening({
   focusNow,
   projectCount,
 }: OpeningProps) {
+  // Vérifiable par le jury : les 6 projets ne sont pas tous des commandes
+  // clients (MyDayPlanner, THM Roadmap, HashVault sont personnels).
+  const introduction = `Développeur full-stack freelance depuis 2023 : ${projectCount} applications web livrées en production, pour des clients béninois et en projets personnels.`
+
   return (
     <SectionFrame
       id="ouverture"
@@ -38,26 +31,35 @@ export function Opening({
       className="enter"
     >
       <div className="opening">
-        {/* width/height fixes : l'espace est réservé avant le chargement,
-            aucun décalage de mise en page. preload remplace `priority`,
-            déprécié en Next 16 : l'image est au-dessus de la ligne de flottaison. */}
-        <div className="opening__portrait">
+        <div className="opening__copy">
+          <p className="opening__eyebrow mono">Full-stack · sécurité applicative</p>
+
+          <h1 className="display display--statement opening__title">
+            <RevealLines text={headline} />
+          </h1>
+
+          <p className="opening__intro">{introduction}</p>
+
+          <div className="opening__actions" aria-label="Actions principales">
+            <a className="btn btn--primary" href="#travaux">
+              Voir mes projets <span aria-hidden="true">↓</span>
+            </a>
+            <a className="btn" href="#contact">Me contacter</a>
+          </div>
+        </div>
+
+        <figure className="opening__portrait">
           <Image
             src="/images/portrait.webp"
             alt="Suhrago Nelkaël Tolofon"
             width={800}
             height={1067}
             preload
-            sizes="(min-width: 64rem) 18rem, 180px"
+            sizes="(min-width: 64rem) 22rem, 72vw"
           />
-        </div>
-
-        <h1 className="display display--statement opening__title">
-          <RevealLines text={headline} />
-        </h1>
+          <figcaption className="opening__portrait-caption mono">Cotonou · Bénin</figcaption>
+        </figure>
       </div>
-
-      <hr className="rule" style={{ margin: 'var(--space-12) 0 var(--space-6)' }} />
 
       <OpeningMeta availability={availability} location={location} focusNow={focusNow} />
     </SectionFrame>

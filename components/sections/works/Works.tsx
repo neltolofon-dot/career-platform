@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { SectionFrame } from '@/components/primitives/SectionFrame'
+import { FeaturedProject } from './FeaturedProject'
 import { WorksRow } from './WorksRow'
 
 type Project = {
@@ -10,23 +11,9 @@ type Project = {
   year: number
   stack: string[]
   summary: string
+  featured: boolean
 }
 
-/**
- * Mouvement 01 — TRAVAUX.
- *
- * ┌────────────────────────────────────────────────────────────────────┐
- * │  UNE TABLE, PAS DES CARTES.                                        │
- * │                                                                    │
- * │  Le sujet interdit explicitement « une page composée uniquement    │
- * │  de cartes ». C'est l'écran le plus différenciant du site : aucune │
- * │  IA ne produit spontanément un index typographique.                │
- * │                                                                    │
- * │  Une table est aussi la bonne SÉMANTIQUE : des données tabulaires  │
- * │  comparables sur des colonnes homogènes. Les lecteurs d'écran      │
- * │  annoncent les en-têtes, ce qu'une grille de div ne fait pas.      │
- * └────────────────────────────────────────────────────────────────────┘
- */
 export function Works({
   projects,
   domains,
@@ -37,6 +24,7 @@ export function Works({
   activeDomain: string | null
 }) {
   const n = projects.length
+  const showcase = projects.slice(0, 3)
 
   return (
     <SectionFrame
@@ -46,17 +34,34 @@ export function Works({
       anchor="1-12"
       className="enter"
     >
-      <h2 className="display display--section" style={{ marginBottom: 'var(--space-8)' }}>
-        Travaux
-      </h2>
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker mono">Sélection récente</p>
+          <h2 className="display display--section">Des produits réels, pas des exercices.</h2>
+        </div>
+        <p className="section-heading__intro">
+          Commerce, productivité et sécurité : chaque projet répond à un usage concret,
+          avec une architecture documentée et un résultat visible.
+        </p>
+      </div>
 
-      {/* Des LIENS, pas des boutons : le filtre vit dans l'URL, s'applique côté
-          serveur, se partage et s'indexe. Works reste un Server Component ;
-          Link rend un vrai <a href>, fonctionnel même sans JavaScript. */}
-      <nav
-        aria-label="Filtrer les travaux par domaine"
-        style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}
-      >
+      {showcase.length > 0 && (
+        <div className="works-showcase">
+          {showcase.map((project, index) => (
+            <FeaturedProject key={project.slug} project={project} index={index} />
+          ))}
+        </div>
+      )}
+
+      <div className="works-index-heading">
+        <div>
+          <p className="section-kicker mono">Index complet</p>
+          <h3 className="display">Tous les travaux</h3>
+        </div>
+        <span className="mono">{n} {n > 1 ? 'entrées' : 'entrée'}</span>
+      </div>
+
+      <nav className="works-filters" aria-label="Filtrer les travaux par domaine">
         <Link
           href="/#travaux"
           prefetch={false}
@@ -65,15 +70,15 @@ export function Works({
         >
           Tous
         </Link>
-        {domains.map((d) => (
+        {domains.map((domain) => (
           <Link
-            key={d.name}
-            href={`/?domaine=${encodeURIComponent(d.name)}#travaux`}
+            key={domain.name}
+            href={`/?domaine=${encodeURIComponent(domain.name)}#travaux`}
             prefetch={false}
             className="chat-suggestion"
-            aria-current={activeDomain === d.name ? 'true' : undefined}
+            aria-current={activeDomain === domain.name ? 'true' : undefined}
           >
-            {d.name}
+            {domain.name}
           </Link>
         ))}
       </nav>
@@ -92,8 +97,8 @@ export function Works({
           </tr>
         </thead>
         <tbody>
-          {projects.map((p) => (
-            <WorksRow key={p.slug} project={p} />
+          {projects.map((project) => (
+            <WorksRow key={project.slug} project={project} />
           ))}
         </tbody>
       </table>
