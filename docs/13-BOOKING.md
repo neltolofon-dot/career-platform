@@ -899,10 +899,10 @@ SLOT="2026-09-25T09:00:00.000Z"
 # Deux réservations SIMULTANÉES sur le même créneau
 curl -s -o /dev/null -w "%{http_code} " -X POST "$URL/api/booking" \
   -H "Content-Type: application/json" \
-  -d "{\"serviceSlug\":\"appel-decouverte\",\"startsAt\":\"$SLOT\",\"name\":\"A\",\"email\":\"a@test.fr\"}" &
+  -d "{\"serviceSlug\":\"appel-decouverte\",\"startsAt\":\"$SLOT\",\"name\":\"Alice\",\"email\":\"a@test.fr\"}" &
 curl -s -o /dev/null -w "%{http_code} " -X POST "$URL/api/booking" \
   -H "Content-Type: application/json" \
-  -d "{\"serviceSlug\":\"appel-decouverte\",\"startsAt\":\"$SLOT\",\"name\":\"B\",\"email\":\"b@test.fr\"}" &
+  -d "{\"serviceSlug\":\"appel-decouverte\",\"startsAt\":\"$SLOT\",\"name\":\"Bruno\",\"email\":\"b@test.fr\"}" &
 wait; echo
 
 # ATTENDU : "201 409" ou "409 201". JAMAIS "201 201".

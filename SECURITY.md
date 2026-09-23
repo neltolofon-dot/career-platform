@@ -343,3 +343,55 @@ compteur.
 défendable (coût, simplicité) — mais seulement si chaque client applicatif isole ses propres
 clés. Sans ce préfixe, l'environnement de test devient un vecteur de déni de service contre
 la production, par sa propre équipe.
+
+## Invariants métier
+
+### Aucune double réservation d'un même créneau
+
+Double rempart (`lib/services/booking.ts`) : verrou Redis (`acquireSlotLock`, optimisation) +
+index unique **partiel** `appointments_active_slot_idx` sur `startsAt`, limité aux statuts
+`PENDING` et `CONFIRMED` (garantie). Une violation `P2002` devient un HTTP 409. Le créneau est
+en outre revalidé côté serveur contre les créneaux réellement proposés : un client forgé ne
+peut pas réserver hors horaires.
+
+**Test 1 — deux réservations simultanées sur le même créneau**, production, 23/09/2026 :
+
+```bash
+SLOT="2026-09-24T08:45:00.000Z"
+curl ... -d '{"serviceSlug":"appel-decouverte","startsAt":"'$SLOT'","name":"Alice","email":"a@test.fr"}' &
+curl ... -d '{"serviceSlug":"appel-decouverte","startsAt":"'$SLOT'","name":"Bruno","email":"b@test.fr"}' &
+wait
+```
+```
+409 201
+Alice : {"id":"cmuecej3d0003jm04shq22tuk","cancelToken":"cmuecej3d0004jm04xb5nz1m9","startsAt":"2026-09-24T08:45:00.000Z","endsAt":"2026-09-24T09:15:00.000Z"}
+Bruno : {"error":"Ce créneau vient d'être réservé."}
+En base sur ce créneau : [{"status":"PENDING","contact":{"email":"a@test.fr"}}]
+```
+Un 201, un 409, une seule ligne en base. **Jamais `201 201`.**
+
+Note : le test tel qu'écrit initialement dans `docs/13-BOOKING.md` utilisait `"name":"A"` et
+`"name":"B"` — rejetés par la validation (`name` exige 2 caractères), il renvoyait `422 422` et
+ne testait donc pas l'invariant. Corrigé dans le document.
+
+### Une annulation libère le créneau (index PARTIEL)
+
+**Test 2 — réserver, annuler par le lien, reprendre le créneau**, production, 23/09/2026 :
+
+```
+1. Créneau 2026-09-24T08:45:00.000Z sur /reserver après réservation : ABSENT (occupé)
+2. GET /annuler/cmuecej3d0004jm04xb5nz1m9 : 200 — Annuler ce rendez-vous ?
+3. GET /api/booking/cancel/cmuecej3d0004jm04xb5nz1m9 (doit être refusé) : 405
+4. POST /api/booking/cancel/cmuecej3d0004jm04xb5nz1m9 (bouton) : {"ok":true} HTTP 200
+5. Créneau 2026-09-24T08:45:00.000Z sur /reserver après annulation : PRÉSENT (libre)
+6. Nouvelle réservation du même créneau : {"id":"cmuecf7ir000cjm042lxke6kv",...} HTTP 201
+7. En base sur ce créneau : [{"status":"CANCELLED","contact":{"email":"a@test.fr"}},{"status":"PENDING","contact":{"email":"c@test.fr"}}]
+```
+
+Deux lignes coexistent sur le même `startsAt` — une `CANCELLED`, une `PENDING` — sans violer
+l'index : c'est la preuve qu'il est **partiel**. Un index unique simple sur `startsAt` aurait
+bloqué le créneau pour toujours après la première annulation.
+
+Au passage (étape 3) : l'annulation refuse le `GET` (405). Un aperçu de lien dans une
+messagerie, ou un préchargement du navigateur, ne peut pas annuler un rendez-vous. Le lien
+repose sur un `cancelToken` opaque (cuid), pas sur l'identifiant du rendez-vous.
