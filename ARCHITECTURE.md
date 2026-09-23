@@ -1,13 +1,33 @@
-# Architecture — Personal Career Platform
+# Architecture
 
-## Infrastructure
+Next.js 16 (App Router) · TypeScript strict · Prisma + PostgreSQL (Neon, pgvector) · Redis
+(Upstash) · Gemini · Vercel. Chaque décision structurante est reprise, avec sa justification
+et l'alternative écartée, dans la dernière section.
 
-**Isolation par environnement (Redis).** Une seule base Upstash sert le dev, les preview et
-la production. Sans préfixe, un test local consomme le quota de rate limit de production et
-invalide le cache des visiteurs réels. Toutes les clés Redis (`lib/redis.ts`) sont préfixées
-par `ENV = process.env.VERCEL_ENV ?? 'dev'` (`production` | `preview` | `dev`) : rate limit de
-login, cache versionné du portfolio, compteur d'événements SSE, verrou de créneau, cache de
-session.
+---
+
+## Frontend
+
+**Server Components par défaut.** Toutes les sections publiques (Ouverture, Travaux,
+Trajectoire, Terrain) sont des Server Components. Deux composants seulement sont des Client
+Components sur l'accueil : `ChatPanel` (conversation, saisie, appel réseau) et `ContactForm`
+(état d'envoi) — chacun porte en tête la justification de son `"use client"`.
+
+**Motion en CSS, pas en JavaScript (D8).** Entrée au scroll par `animation-timeline: view()`
+(classe `.enter`), révélation typographique masquée, View Transitions natives entre l'index et
+la page projet (`viewTransitionName` partagé sur le titre). `prefers-reduced-motion` coupe
+tout. Aucune bibliothèque d'animation.
+
+**Direction artistique « Dossier technique ».** Encre sur papier, tokens CSS (`app/globals.css`)
+— aucune valeur brute de couleur ou de taille dans un composant. `SectionFrame` encode la grille
+signature : colonne de métadonnées sticky en marge + contenu ancré asymétriquement. Cette
+colonne n'est jamais soumise au fondu d'entrée : appliqué à toute la section, il la rendait
+illisible avant le scroll (contraste 1.15 relevé par Lighthouse) ; `.enter` ne porte que sur
+le corps.
+
+**Index des travaux en table (D15), Markdown sans HTML (D14).** L'index est une vraie `<table>`
+sémantique. Le contenu des projets est rendu par `react-markdown`, qui produit des éléments
+React et non une chaîne HTML : aucun `dangerouslySetInnerHTML` dans le projet.
 
 ---
 
@@ -56,9 +76,8 @@ suppression) déclenche deux effets, au même endroit, pour qu'aucun transport n
 oublier :
 1. `bumpCacheVersion()` — `INCR {ENV}:portfolio:version` invalide tout le cache versionné d'un
    coup (D13).
-2. `onContentChanged()` — point d'accroche de la réindexation RAG (implémentée au bloc 3) :
-   la base de connaissances du chatbot doit suivre le CMS, sinon il répond sur des données
-   mortes.
+2. `onContentChanged()` — réindexation RAG : la base de connaissances du chatbot doit suivre le
+   CMS, sinon il répond sur des données mortes.
 
 ### D12 — Pagination obligatoire et plafonnée
 
@@ -67,15 +86,99 @@ Toute liste exposée est paginée côté serveur, `page` et `perPage` validés p
 table en mémoire serveur en une seule requête — un déni de service trivial. Vérifié en
 production : `perPage=999999` renvoie 400, pas une liste de 999999 lignes.
 
-### D13 — Invalidation de cache par version
+### Routes publiques
 
-Voir § Infrastructure ci-dessus. `bumpCacheVersion()` est appelée par `afterWrite()`, jamais
-directement par un transport — encore une conséquence de D11 : si l'invalidation vivait dans
-chaque route handler, l'oublier dans un seul suffirait à servir du contenu périmé.
+| Route | Rôle | Protections |
+|---|---|---|
+| `POST /api/chat` | question au chatbot | Zod (3-500 car.), corps ≤ 8 Ko, rate limit 10/h/visiteur + 30/h/IP, 503 explicite si Gemini indisponible |
+| `POST /api/contact` | contact entrant | Zod, corps ≤ 16 Ko, rate limit 3/h, champ piège silencieux (201 sans écriture) |
+| `POST /api/booking` | réservation | Zod, revalidation serveur du créneau, verrou + index partiel, 409 sur collision, rate limit 5/h |
+| `POST /api/booking/cancel/[token]` | annulation | token opaque, `GET` refusé (405) |
+
+Toutes renvoient 405 sur les méthodes non prévues, et un message générique avec un `ref` de
+corrélation sur erreur interne — le détail reste dans les logs serveur.
 
 ---
 
-## IA
+## Base de données (Prisma / Neon)
+
+Détail complet dans [DATABASE.md](./DATABASE.md). Les points structurants :
+
+- **`Contact` est le pivot** : la personne existe une fois (email unique), rattachée à ses
+  prospects, conversations et rendez-vous.
+- **Cinq objets en SQL manuel** que Prisma ne sait pas exprimer : index HNSW, index GIN, colonne
+  `tsv` générée, index unique partiel sur les rendez-vous, index BRIN. `npm run verify:db` en
+  contrôle quatre ; `prisma migrate dev` est interdit (il propose de les supprimer), la
+  procédure `--create-only` + relecture du SQL est imposée.
+- **Transactions** sur toute écriture multi-tables : contact entrant (6 tables), réservation
+  (4), changement d'étape CRM avec son audit (2).
+- **Neon** : `DATABASE_URL` poolée pour le runtime, `DIRECT_URL` directe pour les migrations.
+
+---
+
+## Infrastructure (Redis, cache, déploiement)
+
+**Isolation par environnement (Redis).** Une seule base Upstash sert le dev, les preview et
+la production. Sans préfixe, un test local consomme le quota de rate limit de production et
+invalide le cache des visiteurs réels. Toutes les clés Redis (`lib/redis.ts`) sont préfixées
+par `ENV = process.env.VERCEL_ENV ?? 'dev'` (`production` | `preview` | `dev`) : rate limit de
+login, cache versionné du portfolio, compteur d'événements, verrou de créneau, cache de
+session.
+
+**Redis : cinq usages (D5).**
+1. Rate limiting à fenêtre glissante — connexion (IP + compte), chat, contact, réservation.
+2. Cache des lectures publiques, invalidé par version (D13).
+3. Compteur d'événements lu par la cloche de notifications de l'admin.
+4. Verrou de créneau anti double-réservation (D6).
+5. Cache de session en lecture, TTL 60 s — la source de vérité reste Postgres, la révocation
+   reste quasi immédiate.
+
+**D13 — Invalidation de cache par version.** `bumpCacheVersion()` est appelée par
+`afterWrite()`, jamais directement par un transport — encore une conséquence de D11 : si
+l'invalidation vivait dans chaque route handler, l'oublier dans un seul suffirait à servir du
+contenu périmé.
+
+**Déploiement.** Vercel, déploiement automatique à chaque `git push` sur `main`. `postinstall:
+prisma generate` est indispensable : Vercel réutilise `node_modules` en cache et ne régénère
+pas le client Prisma de lui-même — quatre builds ont échoué (`TS2339` sur un champ ajouté au
+schéma) avant ce correctif. `proxy.ts` (ex-`middleware.ts`) ne fait qu'en-têtes HTTP et
+redirection de confort ; ce n'est pas une frontière de sécurité (D1).
+
+---
+
+## Intelligence artificielle (RAG, Gemini)
+
+```
+CONTENU CMS ──► chunking structurel ──► embedding 1536 + L2 ──► knowledge_chunks
+                                                                (HNSW + tsvector)
+QUESTION ──► embedding ──► vectoriel top 20 ─┐
+         └──────────────► lexical top 20 ───┴► RRF ► top 6
+                                                     │
+                     distance cosinus > 0.36 ? ── oui ──► REFUS (sans appeler Gemini)
+                                                     │ non
+                                                     ▼
+                                   cascade Gemini ─► réponse + sources cliquables
+```
+
+**Chunking structurel.** Chaque entité produit 1 à 3 chunks sémantiquement complets (un projet :
+identité, résultats, détails techniques), citables et réindexés de façon incrémentale par
+`contentHash`. 30 chunks à l'indexation initiale.
+
+**Embeddings.** `gemini-embedding-001` en 1536 dimensions, normalisation L2 côté serveur (norme
+mesurée des sorties : 0.6922), `taskType` asymétrique (`RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`).
+
+**Recherche hybride.** Vectorielle (cosinus) et lexicale (tsvector français) en parallèle,
+fusionnées par Reciprocal Rank Fusion (`k = 60`).
+
+**Refus déterministe sur la distance cosinus.** Le seuil RRF initial était inerte : le RRF note
+un rang, et le rang 1 vaut toujours 1/61 ≈ 0.0164, pertinent ou non (mesuré : 0.01639 pour 7
+questions sur 7). Le refus porte désormais sur la distance cosinus du chunk le plus proche,
+`MAX_COSINE_DISTANCE = 0.36`, calibré sur mesures (PERFORMANCE.md § Calibrage). Le RRF ordonne,
+la distance cosinus qualifie.
+
+**Défense contre le prompt injection.** Contexte dans un bloc délimité, déclaré comme donnée
+et jamais comme instruction ; cadre fermé (rien hors contexte) ; refus en amont dans le code ;
+clé Gemini côté serveur uniquement ; sortie rendue en texte échappé.
 
 ### Cascade de modèles Gemini
 
@@ -130,3 +233,69 @@ l'ensemble de leurs hash à l'existant (inchangé → aucun appel API, comme ava
 d'eux a changé, supprime **une seule fois** puis réinsère l'ensemble des chunks frais de cette
 entité. Vérifié après correction : 30 chunks écrits = 30 chunks en base ; un second run
 (contenu inchangé) rapporte 0 écrit / 30 ignorés, confirmant l'idempotence.
+
+---
+
+## Sécurité
+
+Détail, commandes reproductibles et sorties dans [SECURITY.md](./SECURITY.md). Les points
+structurants :
+
+- **Autorisation au contact de la donnée** : `requireAdminPage()` / `requireAdminApi()` en
+  première ligne de chaque page et route admin ; `curl /api/admin/projects` sans cookie → 401.
+- **Auth maison** : Argon2id, sessions opaques dont seul le hash SHA-256 est stocké, cookie
+  `__Host-` `httpOnly` `Secure` `SameSite=Lax`, aucune route d'inscription, rate limit du login
+  par IP et par compte.
+- **Zod sur toute entrée**, messages d'erreur génériques côté client, aucun
+  `dangerouslySetInnerHTML`.
+- **Invariants métier prouvés en production** : réservations simultanées → `409 201` ;
+  annulation → créneau libéré et réservable.
+- **Deux incidents documentés** : exposition de `.env` dans la source de déploiement CLI
+  (rotation des 6 secrets), quota de rate limit partagé entre environnements.
+
+---
+
+## Performance
+
+Mesures, plans d'exécution et audit Lighthouse dans [PERFORMANCE.md](./PERFORMANCE.md). Les
+points structurants :
+
+- **Index vectoriel** : HNSW créé et fonctionnel ; à 30 chunks le planificateur préfère
+  légitimement un Seq Scan (coût 9.42 contre 138.59), prouvé par `enable_seqscan = off`.
+- **Cache versionné** : lectures publiques servies depuis Redis (TTL 300 s), invalidation
+  globale par un seul `INCR`.
+- **Latence Gemini** : de 14 s à 289 s mesurés selon la charge ; réponses tronquées corrigées en
+  désactivant le raisonnement interne, qui consommait 381 des 400 tokens de sortie.
+- **JS client minimal** : motion en CSS, deux Client Components sur l'accueil.
+
+---
+
+## Décisions techniques
+
+| # | Décision | Justification | Alternative écartée |
+|---|---|---|---|
+| D1 | Autorisation dans `requireAdmin()`, au contact de la donnée | le middleware/proxy a déjà été contourné (CVE-2026-64642) ; un contrôle d'accès ne dépend pas d'une couche que le framework peut court-circuiter | autorisation dans `middleware.ts` |
+| D2 | Auth maison : sessions opaques hachées, Argon2id, aucune inscription | un seul utilisateur ; une abstraction non écrite se défend mal ; ce qui n'existe pas ne s'exploite pas | NextAuth / Auth.js |
+| D3 | Chunking structurel par entité (1 à 3 chunks) | chunks citables, compréhensibles seuls, réindexation incrémentale par hash | découpage fixe à N caractères |
+| D4 | Notifications par version Redis, interrogée toutes les 10 s | WebSocket impossible en serverless ; SSE prévu mais coupé sous contrainte de temps ; la lecture de version évite toute requête Postgres à vide | WebSocket ; polling de Postgres |
+| D5 | Redis pour cinq usages (débit, cache, événements, verrou, sessions) | chaque usage a sa justification propre, préfixé par environnement | Redis limité au rate limiting |
+| D6 | Double rempart : verrou Redis + index unique **partiel** | le verrou est une optimisation, l'index est la garantie ; partiel pour qu'une annulation libère le créneau | verrou Redis seul (un invariant ne repose pas sur un cache) ; `UNIQUE` total (bloque le créneau après annulation) |
+| D7 | Uploads : magic bytes, allowlist, ré-encodage Sharp — **non livré** | le ré-encodage est la vraie sanitisation d'un fichier polyglotte | confiance dans l'extension ou le `Content-Type` |
+| D8 | Motion en CSS scroll-driven | 0 Ko de JS d'animation, sections restées Server Components | Framer Motion (~35 Ko gzip, `"use client"` partout) |
+| D9 | Pas de dark mode | l'identité repose sur un rapport encre/papier précis ; le temps est allé au RAG | toggle de thème |
+| D10 | Audience sans IP brute (hash à sel quotidien) — **non livré** | compter des visiteurs uniques sans pouvoir remonter à une personne | stockage de l'IP |
+| D11 | Une couche de service, deux transports | la logique métier n'existe qu'une fois ; aucun chemin ne peut diverger | logique dupliquée dans Server Actions et route handlers |
+| D12 | Pagination serveur plafonnée à 100 | `perPage=999999` serait un déni de service en une requête | listes non bornées |
+| D13 | Invalidation de cache par version (`INCR`) | tout le cache devient inatteignable d'un coup, aucune clé à oublier | `SCAN` + `DEL` clé par clé |
+| D14 | Markdown rendu par `react-markdown`, sans `rehype-raw` | produit des éléments React, pas du HTML : rien à assainir | chaîne HTML + `dangerouslySetInnerHTML` et sanitizer |
+| D15 | Index des travaux en `<table>` | sémantique tabulaire annoncée par les lecteurs d'écran ; le sujet exclut une page de cartes | grille de cartes |
+| D16 | Sections publiques en Server Components | quasi aucun JS livré, données lues côté serveur | sections client avec fetch côté navigateur |
+| D17 | Embeddings en 1536 dimensions | HNSW plafonne à 2000 dimensions pour `vector` : 3072 serait non indexable | 3072 natif ; `halfvec(3072)` (gain marginal, complexité en plus) |
+| D18 | Normalisation L2 côté serveur | Gemini ne normalise pas les sorties tronquées (norme 0.6922) : sans elle le cosinus est faux, sans erreur | faire confiance à la sortie brute |
+| D19 | Recherche hybride fusionnée par RRF | le vectoriel rate noms propres et acronymes ; RRF fusionne des rangs sans poids arbitraire | vectoriel seul ; somme pondérée de scores |
+| D20 | Refus dans le code, sur la distance cosinus | un prompt se contourne, un `if` non ; le rang RRF ne mesure pas la pertinence | refus par consigne de prompt ; seuil sur le score RRF (mesuré inerte) |
+| D21 | Cascade de 2 modèles Gemini, 503 explicite en dernier recours | le tier gratuit renvoie des 503 ; seuls ces deux modèles ont répondu, configuration vérifiée | modèle unique ; cascade de 4 avec modèles non vérifiés |
+| D22 | Contact entrant en une transaction (6 tables) | un état partiel serait invisible et non rattrapable | écritures successives |
+| D23 | Champ piège silencieux sur le formulaire de contact | anti-spam à coût nul ; répondre 201 n'apprend rien au robot | CAPTCHA ou service tiers ; 422 nommant le champ |
+| D24 | Pipeline CRM par boutons de changement d'étape | exigence : un pipeline fonctionnel, pas une interaction | glisser-déposer (bibliothèque cliente, ~1 h, 0 point) |
+| D25 | Réservation : liste des 7 prochains jours, annulation par token opaque en `POST` | le cœur est le calcul serveur et la non-collision ; un `GET` ne doit pas modifier d'état | vue calendrier mensuelle ; annulation par `GET` ou par identifiant séquentiel |

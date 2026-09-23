@@ -155,3 +155,39 @@ remesurer si le chunk de disponibilité du profil est réécrit.
 
 Le RRF reste utile pour **ordonner** les chunks transmis à Gemini ; il n'est plus utilisé pour
 **qualifier** la pertinence. Le RRF ordonne, la distance cosinus qualifie.
+
+---
+
+## Norme L2 des embeddings
+
+`gemini-embedding-001` produit nativement 3072 dimensions ; la sortie est tronquée à 1536
+(MRL) pour rester indexable par HNSW. Gemini **ne re-normalise pas** la sortie tronquée.
+Mesuré par `npm run check` (23/09/2026, embedding réel) :
+
+```
+✓ Embedding reçu — 1536 dimensions. Norme L2 = 0.6922.
+```
+
+Une norme de 0.6922 au lieu de 1 fausse la distance cosinus sans lever la moindre erreur :
+le RAG « marche » et classe mal. `l2normalize()` (`lib/rag/embed.ts`) ramène chaque vecteur à
+une norme de 1, à l'indexation comme à la recherche.
+
+---
+
+## Cache versionné
+
+Les lectures publiques (profil, projets publiés, page projet, expériences, compétences,
+services) passent par `cached()` (`lib/redis.ts`) :
+
+- **clé** : `{ENV}:portfolio:v{n}:{nom}` — le numéro de version `n` est lu dans
+  `{ENV}:portfolio:version` ;
+- **TTL** : 300 s — même sans écriture, le cache se rafraîchit seul, ce qui borne la casse en
+  cas d'invalidation manquée ;
+- **invalidation** : toute écriture admin passe par `afterWrite()` → `INCR
+  {ENV}:portfolio:version`. Toutes les clés de l'ancienne version deviennent inatteignables
+  d'un coup, sans `SCAN` ni `DEL` en masse ; elles expirent seules par TTL.
+
+Piège rencontré et corrigé : Redis sérialise en JSON, donc une `Date` revient en chaîne ISO sur
+un hit de cache. `getPublicExperiences()` ré-hydrate `startDate`/`endDate` après `cached()` ;
+sans cela, la page d'accueil plantait une requête sur deux (hit de cache → `.getFullYear()` sur
+une chaîne).
