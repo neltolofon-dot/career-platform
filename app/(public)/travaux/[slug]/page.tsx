@@ -13,10 +13,20 @@ type Params = { params: Promise<{ slug: string }> }
  * Le contenu change rarement ; revalidatePath('/') est déjà appelé à
  * chaque écriture admin, donc la fraîcheur est garantie sans rendu
  * à la demande.
+ *
+ * dynamicParams reste à true (défaut) : si la base est injoignable au
+ * moment du build, on ne fait pas échouer tout le déploiement pour une
+ * optimisation de pré-rendu — chaque slug est simplement rendu à la
+ * demande au premier accès, au lieu d'être pré-généré.
  */
 export async function generateStaticParams() {
-  const projects = await getPublicProjects()
-  return projects.map((p) => ({ slug: p.slug }))
+  try {
+    const projects = await getPublicProjects()
+    return projects.map((p) => ({ slug: p.slug }))
+  } catch (err) {
+    console.error('generateStaticParams(/travaux/[slug]) : base injoignable au build', err)
+    return []
+  }
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
