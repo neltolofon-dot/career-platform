@@ -44,16 +44,10 @@ async function seedAdmin() {
 }
 
 async function seedProfile() {
-  // `focusNow` existe dans prisma/content.ts (repris de docs/03-DESIGN-SYSTEM.md,
-  // §00 Ouverture : "FOCUS ACTUEL : ...") mais AUCUN champ correspondant
-  // n'existe dans le modèle Profile (prisma/schema.prisma). Écart entre le
-  // design system et le schéma — signalé plutôt que contourné, ignoré ici.
-  const { focusNow: _focusNow, ...data } = profileContent;
-
   return prisma.profile.upsert({
     where: { id: "profile" },
-    update: data,
-    create: { id: "profile", ...data },
+    update: profileContent,
+    create: { id: "profile", ...profileContent },
   });
 }
 

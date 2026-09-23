@@ -160,6 +160,7 @@ model Profile {
   timezone     String   @default("Africa/Lagos")
   email        String
   availability String // texte libre, affiché en métadonnée vivante en page d'accueil
+  focusNow     String? // "Focus actuel", ligne de métadonnées vivantes de l'ouverture
   openToWork   Boolean  @default(true)
   socials      Json // { github, linkedin, x, facebook }
   avatarId     String?
