@@ -74,7 +74,7 @@ export async function getPublicProject(slug: string) {
 }
 
 export async function getPublicExperiences() {
-  return cached('experiences', 300, async () =>
+  const experiences = await cached('experiences', 300, async () =>
     prisma.experience.findMany({
       where: { status: 'PUBLISHED' },
       select: {
@@ -90,6 +90,16 @@ export async function getPublicExperiences() {
       orderBy: [{ order: 'asc' }, { startDate: 'desc' }],
     }),
   )
+
+  // cached() passe par Redis : sur un hit, startDate/endDate reviennent en
+  // chaînes ISO (JSON n'a pas de type Date), pas en Date. Les composants
+  // appellent .getFullYear() dessus — sans cette ré-hydratation, un hit de
+  // cache fait planter la page (une miss sur deux, donc intermittent).
+  return experiences.map((e) => ({
+    ...e,
+    startDate: new Date(e.startDate),
+    endDate: e.endDate ? new Date(e.endDate) : null,
+  }))
 }
 
 /**

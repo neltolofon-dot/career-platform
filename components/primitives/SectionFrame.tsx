@@ -37,11 +37,10 @@ export function SectionFrame({
   className = '',
 }: SectionFrameProps) {
   return (
-    <section
-      id={id}
-      data-anchor={anchor}
-      className={`section ${className}`.trim()}
-    >
+    <section id={id} data-anchor={anchor} className="section">
+      {/* La colonne de métadonnées reste toujours --ink-muted et pleinement
+          visible (docs/03-DESIGN-SYSTEM.md §4) : .enter ne s'applique
+          qu'au corps, jamais à cette colonne sticky. */}
       <div className="section__meta">
         <span className="mono" aria-hidden="true">
           {number}
@@ -53,7 +52,7 @@ export function SectionFrame({
         ))}
       </div>
 
-      <div className="section__body">{children}</div>
+      <div className={`section__body ${className}`.trim()}>{children}</div>
     </section>
   )
 }
