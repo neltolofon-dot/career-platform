@@ -43,7 +43,8 @@ for (const t of TESTS) {
   const ok = got === t.expect
 
   console.log(`\n${ok ? '✓' : '✗'} [${t.expect}] ${t.q}${ok ? '' : `  (obtenu : ${got})`}`)
-  console.log(`  → ${data.answer ?? data.error}`)
+  // `ref` : identifiant de corrélation du 500, à rechercher dans les logs Vercel.
+  console.log(`  → ${data.answer ?? data.error}${data.ref ? `  [ref ${data.ref}]` : ''}`)
   if (data.citations?.length) {
     console.log(`  → sources : ${data.citations.map((c) => `${c.title} (${c.score})`).join(', ')}`)
   }

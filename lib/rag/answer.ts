@@ -44,6 +44,13 @@ function isUpstreamUnavailable(status: number | null): boolean {
   return status !== null && (status === 429 || status >= 500)
 }
 
+// fetch (undici) lève TypeError('fetch failed') quand la connexion à Google
+// casse (reset, socket, DNS) : panne amont, sans statut HTTP. Le message
+// exact distingue ce cas d'un TypeError de programmation.
+function isNetworkFailure(error: unknown): boolean {
+  return error instanceof TypeError && error.message === 'fetch failed'
+}
+
 /** Tous les modèles ont échoué (503/429) ou le budget est épuisé. */
 export class ModelUnavailableError extends Error {
   constructor() {
@@ -143,8 +150,9 @@ async function generateWithFallback(contents: string): Promise<string | undefine
     } catch (error) {
       const status = upstreamStatus(error)
       const budgetExhausted = Date.now() >= deadline
+      const network = isNetworkFailure(error)
 
-      if (budgetExhausted || isUpstreamUnavailable(status)) {
+      if (budgetExhausted || network || isUpstreamUnavailable(status)) {
         // Chaque bascule est journalisée : c'est la preuve que la cascade
         // a fonctionné en production, pas seulement en théorie.
         console.warn(
@@ -153,7 +161,7 @@ async function generateWithFallback(contents: string): Promise<string | undefine
             scope: 'chat.fallback',
             from: model,
             to: budgetExhausted ? null : (CHAT_MODELS[i + 1]?.model ?? null),
-            status: budgetExhausted ? 'timeout' : status,
+            status: budgetExhausted ? 'timeout' : network ? 'network' : status,
           }),
         )
         if (budgetExhausted) break
@@ -177,7 +185,7 @@ export async function answerQuestion(question: string): Promise<Answer> {
     // L'embedding de la question passe AUSSI par Gemini, hors cascade :
     // une panne amont à cette étape est une indisponibilité, pas un 500.
     const status = upstreamStatus(error)
-    if (isUpstreamUnavailable(status)) {
+    if (isUpstreamUnavailable(status) || isNetworkFailure(error)) {
       console.warn(JSON.stringify({ level: 'warn', scope: 'chat.embedding', status }))
       throw new ModelUnavailableError()
     }
