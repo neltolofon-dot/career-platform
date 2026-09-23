@@ -53,3 +53,23 @@ Execution Time: 0.295 ms
 graphe HNSW. La vérification par `SET enable_seqscan = off` confirme que l'index est bien
 utilisable et retourne les mêmes résultats. Le basculement se fera naturellement à mesure que
 la base de connaissances grossit.
+
+---
+
+## Latence Gemini — chat
+
+`/api/chat` (`app/api/chat/route.ts`) a échoué en production avec `FUNCTION_INVOCATION_TIMEOUT`
+(504) dès la première question de `test:rag`. Isolé en appelant directement le SDK :
+
+- `gemini-embedding-001` (`embedContent`) : ~1 s. Pas en cause.
+- `gemini-3.5-flash-lite` (`generateContent`), sur un prompt trivial (« Say hello in one
+  word. ») : **25 à 30+ s**, mesuré sur 3 appels indépendants, jamais sous 24 s, un appel
+  au-delà de 40 s. Le nom du modèle est confirmé valide pour cette clé API
+  (`ai.models.list()` liste bien `models/gemini-3.5-flash-lite`) — ce n'est pas une faute de
+  frappe, c'est une latence réelle et reproductible du modèle.
+
+Embedding + génération + deux requêtes DB parallèles + deux écritures Prisma dépassaient donc
+mécaniquement `maxDuration = 30`. **Décision : `maxDuration` porté à 60**, modèle conservé tel
+que spécifié. Documenté ici plutôt que corrigé silencieusement — une latence à 25-30 s sur un
+prompt d'un mot reste un signal à surveiller, pas un problème résolu par un simple relèvement
+de plafond.

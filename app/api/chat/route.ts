@@ -6,7 +6,10 @@ import { answerQuestion } from '@/lib/rag/answer'
 import { getClientIpHash } from '@/lib/request'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+// 60, pas 30 : gemini-3.5-flash-lite mesuré à 25-30+ s à lui seul en
+// production (voir PERFORMANCE.md § Latence Gemini), avant même
+// l'embedding et les requêtes DB. 30 s faisait timeout la route.
+export const maxDuration = 60
 
 const ENV = process.env.VERCEL_ENV ?? 'dev'
 
