@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel, type ThinkingConfig } from '@google/genai'
 import { prisma } from '@/lib/prisma'
 import { hybridSearch, RELEVANCE_THRESHOLD, type Hit } from './search'
 
@@ -9,11 +9,19 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
  * des 503 par intermittence ; seul gemini-3.5-flash a répondu (22 s).
  * Sur 503 ou 429, on passe IMMÉDIATEMENT au suivant.
  */
-const CHAT_MODELS = [
-  'gemini-3.5-flash', // seul modèle ayant répondu (22 s)
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-  'gemini-3.8-flash',
+//
+// Configuration de raisonnement PAR MODÈLE, mesurée (voir PERFORMANCE.md) :
+// les flash raisonnent par défaut et mangent le budget de sortie (réponse
+// tronquée) -> thinkingLevel MINIMAL. Les flash-lite ne raisonnent pas par
+// défaut, et gemini-3.5-flash-lite REJETTE thinkingBudget: 0 (400) -> on
+// n'envoie rien : un paramètre absent ne peut pas être invalide.
+const MINIMAL: ThinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL }
+
+const CHAT_MODELS: { model: string; thinking?: ThinkingConfig }[] = [
+  { model: 'gemini-3.5-flash', thinking: MINIMAL }, // seul modèle ayant répondu (22 s)
+  { model: 'gemini-3.5-flash-lite' },
+  { model: 'gemini-3.1-flash-lite' },
+  { model: 'gemini-3.8-flash', thinking: MINIMAL },
 ]
 
 // maxDuration de la route = 60 s : il faut garder de la marge pour
@@ -112,7 +120,7 @@ async function generateWithFallback(contents: string): Promise<string | undefine
   const deadline = Date.now() + GENERATION_BUDGET_MS
 
   for (let i = 0; i < CHAT_MODELS.length; i++) {
-    const model = CHAT_MODELS[i]
+    const { model, thinking } = CHAT_MODELS[i]
     const remaining = deadline - Date.now()
     if (remaining <= 0) break
 
@@ -124,12 +132,7 @@ async function generateWithFallback(contents: string): Promise<string | undefine
           systemInstruction: SYSTEM_PROMPT,
           temperature: 0.2, // bas : on veut de la restitution, pas de la créativité
           maxOutputTokens: 400,
-          // Raisonnement interne désactivé. Mesuré sur gemini-3.5-flash : par
-          // défaut, 381 des 400 tokens partent en « thinking », la réponse
-          // est tronquée (finishReason MAX_TOKENS). Désactivé : 0 token de
-          // raisonnement, réponse complète. Restituer un contexte fourni ne
-          // demande pas de raisonner.
-          thinkingConfig: { thinkingBudget: 0 },
+          ...(thinking ? { thinkingConfig: thinking } : {}),
           // timeout = budget RESTANT, pas un budget par modèle. attempts: 1
           // désactive toute relance interne : sur 503 on bascule tout de
           // suite au modèle suivant au lieu d'attendre un backoff.
@@ -149,7 +152,7 @@ async function generateWithFallback(contents: string): Promise<string | undefine
             level: 'warn',
             scope: 'chat.fallback',
             from: model,
-            to: budgetExhausted ? null : (CHAT_MODELS[i + 1] ?? null),
+            to: budgetExhausted ? null : (CHAT_MODELS[i + 1]?.model ?? null),
             status: budgetExhausted ? 'timeout' : status,
           }),
         )

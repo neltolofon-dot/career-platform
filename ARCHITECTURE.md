@@ -93,6 +93,13 @@ timeout le budget **restant**, pas un budget par modèle. Chaque bascule est jou
 `ModelUnavailableError` → `app/api/chat/route.ts` renvoie `503` avec `retryable: true`, que
 l'interface affiche comme « Assistant · indisponible », distinct d'une erreur technique.
 
+La bascule porte sur 429 et tout 5xx amont — y compris sur l'embedding de la question, lui
+aussi servi par Gemini. Un 4xx, en revanche, n'est **pas** contourné : c'est une requête
+invalide de notre part. C'est ce choix qui a permis de trouver que `gemini-3.5-flash-lite`
+rejette `thinkingBudget: 0` (400) ; une cascade qui avalerait les 4xx l'aurait masqué derrière
+un « service indisponible ». D'où une configuration de raisonnement par modèle
+(PERFORMANCE.md § Latence Gemini).
+
 ### Bug trouvé — réindexation par entité, pas par chunk
 
 `upsertChunk()` (`lib/rag/index.ts`) supprimait les chunks existants par `(sourceType,

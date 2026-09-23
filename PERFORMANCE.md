@@ -90,9 +90,26 @@ les réponses s'arrêtaient au milieu d'une phrase (« …a développé un »). 
 
 Par défaut, le modèle « réfléchit » avant de répondre et ces tokens comptent dans
 `maxOutputTokens` : 381 sur 400, il en restait 15 pour la réponse. Restituer un contexte fourni
-ne demande pas de raisonnement : `thinkingBudget: 0` (documenté « 0 is DISABLED » par le SDK)
-est retenu. Les écarts de durée entre variantes sont du bruit de surcharge (un échantillon
-chacune), pas une différence mesurée.
+ne demande pas de raisonnement. Les écarts de durée entre variantes sont du bruit de surcharge
+(un échantillon chacune), pas une différence mesurée.
+
+**Second piège — le paramètre de raisonnement n'est pas accepté partout.** `thinkingBudget: 0`
+a d'abord été retenu. En production, la cascade a basculé sur `gemini-3.5-flash-lite`
+(journal `chat.fallback`, 503 sur le premier modèle), qui a répondu **400 INVALID_ARGUMENT** :
+la requête finissait en 500. Mesuré par modèle (un 400 est un verdict déterministe ; un
+503/429 répété n'en donne aucun) :
+
+| Modèle | sans `thinkingConfig` | `thinkingBudget: 0` | `thinkingLevel: MINIMAL` |
+|---|---|---|---|
+| gemini-3.5-flash | tronquée (381 tokens de raisonnement) | OK | OK |
+| gemini-3.5-flash-lite | OK, 0 token de raisonnement | **400** | OK |
+| gemini-3.1-flash-lite | 503 ×4 | 503 ×4 | 503 ×4 |
+| gemini-3.8-flash | 503 ×4 | 429 ×4 | 429 ×4 |
+
+**Décision : configuration par modèle.** Les flash reçoivent `thinkingLevel: MINIMAL` ; les
+flash-lite ne reçoivent **aucun** paramètre de raisonnement — ils ne raisonnent pas par
+défaut, et un paramètre absent ne peut pas être invalide. Non vérifié, faute de réponse du
+modèle : `MINIMAL` sur gemini-3.8-flash (retenu par analogie avec gemini-3.5-flash).
 
 ---
 
