@@ -125,7 +125,7 @@ a { color: inherit; }
 /* M-a — Le soulignement se dessine sous le lien, de gauche à droite.
          background-size plutôt que ::after : une seule propriété animée,
          composée par le GPU, aucun reflow. */
-a:not(.btn):not(.mono):not(.admin-nav__link) {
+a:not(.btn):not(.mono):not(.admin-nav__link):not(.chat-suggestion) {
   text-decoration: none;
   background-image: linear-gradient(var(--color-vermilion), var(--color-vermilion));
   background-position: 0 100%;
@@ -136,8 +136,8 @@ a:not(.btn):not(.mono):not(.admin-nav__link) {
   padding-bottom: 2px;
 }
 
-a:not(.btn):not(.mono):not(.admin-nav__link):hover,
-a:not(.btn):not(.mono):not(.admin-nav__link):focus-visible {
+a:not(.btn):not(.mono):not(.admin-nav__link):not(.chat-suggestion):hover,
+a:not(.btn):not(.mono):not(.admin-nav__link):not(.chat-suggestion):focus-visible {
   background-size: 100% 1px;
   color: var(--color-vermilion);
 }
@@ -516,6 +516,14 @@ select.field__input option { background: var(--color-elevated); color: var(--col
   border-color: var(--color-vermilion);
   color: var(--color-vermilion);
   background: var(--color-accent-soft);
+}
+
+/* Réutilisée par les filtres de l'index des travaux (liens) : l'actif prend l'accent. */
+a.chat-suggestion { text-decoration: none; }
+
+.chat-suggestion[aria-current="true"] {
+  border-color: var(--color-vermilion);
+  color: var(--color-vermilion);
 }
 
 /* Indicateur d'attente : trois points qui pulsent. Sobre, et il montre

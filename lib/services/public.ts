@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { cached } from '@/lib/redis'
 
@@ -32,10 +33,39 @@ export async function getPublicProfile() {
   )
 }
 
-export async function getPublicProjects() {
-  return cached('projects:published', 300, async () =>
-    prisma.project.findMany({
+/** Domaines des projets publiés, avec leur effectif : liste blanche du filtre. */
+export async function getPublicDomains() {
+  return cached('projects:domains', 300, async () => {
+    const rows = await prisma.project.groupBy({
+      by: ['domain'],
       where: { status: 'PUBLISHED' },
+      _count: { _all: true },
+      orderBy: { domain: 'asc' },
+    })
+    return rows.map((r) => ({ name: r.domain, count: r._count._all }))
+  })
+}
+
+/**
+ * Le paramètre d'URL `domaine` est une entrée utilisateur : validé par Zod
+ * contre la liste blanche des domaines EXISTANTS. Toute autre valeur (inconnue,
+ * répétée, vide) vaut « Tous » — jamais une erreur, jamais une requête libre.
+ */
+export async function resolveDomain(raw: unknown): Promise<string | null> {
+  if (raw === undefined) return null
+  const names = (await getPublicDomains()).map((d) => d.name)
+  if (names.length === 0) return null
+  const parsed = z.enum(names as [string, ...string[]]).safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
+export async function getPublicProjects(rawDomain?: unknown) {
+  const domain = await resolveDomain(rawDomain)
+
+  // Une clé par domaine : le cache d'un filtre ne sert jamais un autre filtre.
+  return cached(domain ? `projects:published:${domain}` : 'projects:published', 300, async () =>
+    prisma.project.findMany({
+      where: { status: 'PUBLISHED', ...(domain ? { domain } : {}) },
       select: {
         slug: true,
         title: true,

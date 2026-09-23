@@ -6,6 +6,8 @@ import {
   getPublicExperiences,
   getPublicSkillsByCategory,
   getPublicServices,
+  getPublicDomains,
+  resolveDomain,
 } from '@/lib/services/public'
 import { Opening } from '@/components/sections/opening/Opening'
 import { Works } from '@/components/sections/works/Works'
@@ -46,24 +48,39 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Page d'accueil — Server Component.
  *
- * Les cinq lectures partent en PARALLÈLE : elles sont indépendantes, et
- * les enchaîner en séquence ajouterait quatre aller-retours inutiles au
+ * Les lectures partent en PARALLÈLE : elles sont indépendantes, et les
+ * enchaîner en séquence ajouterait autant d'aller-retours inutiles au
  * temps de réponse (chacune touche Redis avant Postgres).
+ *
+ * Le filtre des travaux passe par l'URL (?domaine=…) et s'applique côté
+ * serveur : partageable, indexable, sans JavaScript client.
  *
  * Deux sous-composants seulement sont des Client Components : ChatPanel
  * et ContactForm (état, saisie, appel réseau). Toutes les animations
  * d'entrée restent en CSS scroll-driven (classe .enter).
  */
-export default async function HomePage() {
-  const [profile, projects, experiences, skillGroups, services] = await Promise.all([
-    getPublicProfile(),
-    getPublicProjects(),
-    getPublicExperiences(),
-    getPublicSkillsByCategory(),
-    getPublicServices(),
-  ])
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const { domaine } = await searchParams
+
+  const [profile, projects, experiences, skillGroups, services, domains, activeDomain] =
+    await Promise.all([
+      getPublicProfile(),
+      getPublicProjects(domaine),
+      getPublicExperiences(),
+      getPublicSkillsByCategory(),
+      getPublicServices(),
+      getPublicDomains(),
+      resolveDomain(domaine),
+    ])
 
   if (!profile) notFound()
+
+  // Total publié, indépendant du filtre : l'Ouverture ne doit pas dire « 1 projets ».
+  const totalProjects = domains.reduce((n, d) => n + d.count, 0)
 
   return (
     <main>
@@ -72,9 +89,9 @@ export default async function HomePage() {
         availability={profile.availability}
         location={profile.location}
         focusNow={profile.focusNow}
-        projectCount={projects.length}
+        projectCount={totalProjects}
       />
-      <Works projects={projects} />
+      <Works projects={projects} domains={domains} activeDomain={activeDomain} />
       <Trajectory experiences={experiences} />
       <Ground groups={skillGroups} />
       <Dialogue suggestions={DIALOGUE_SUGGESTIONS} />
