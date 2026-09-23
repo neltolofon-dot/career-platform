@@ -1,7 +1,7 @@
 'use client'
 
 // "use client" justifié : état de conversation, saisie et appel réseau.
-// C'est le SEUL composant client de la page d'accueil.
+// Avec ContactForm, l'un des deux seuls composants client de l'accueil.
 
 import { useState, useRef } from 'react'
 

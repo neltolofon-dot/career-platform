@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { requireAdminPage } from '@/lib/auth/guard'
 import { AdminNav } from '@/components/admin/AdminNav'
+import { NotificationBell } from '@/components/admin/NotificationBell'
 import { logoutAction } from './actions'
 
 export const metadata = { robots: { index: false, follow: false } }
@@ -39,7 +40,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
         <AdminNav />
 
-        <form action={logoutAction} style={{ marginTop: 'auto', padding: 'var(--space-4)' }}>
+        {/* marginTop: auto pousse la cloche ET la déconnexion en bas de
+            la barre latérale, la cloche juste au-dessus du formulaire. */}
+        <div style={{ marginTop: 'auto' }}>
+          <NotificationBell />
+        </div>
+
+        <form action={logoutAction} style={{ padding: 'var(--space-4)' }}>
           <p className="mono" style={{ marginBottom: 'var(--space-2)' }}>
             {user.email}
           </p>

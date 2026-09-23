@@ -5,12 +5,14 @@ import {
   getPublicProjects,
   getPublicExperiences,
   getPublicSkillsByCategory,
+  getPublicServices,
 } from '@/lib/services/public'
 import { Opening } from '@/components/sections/opening/Opening'
 import { Works } from '@/components/sections/works/Works'
 import { Trajectory } from '@/components/sections/trajectory/Trajectory'
 import { Ground } from '@/components/sections/ground/Ground'
 import { Dialogue } from '@/components/sections/dialogue/Dialogue'
+import { Contact } from '@/components/sections/contact/Contact'
 
 const DIALOGUE_SUGGESTIONS = [
   'Quels projets pour des clients réels ?',
@@ -36,20 +38,21 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Page d'accueil — Server Component.
  *
- * Les quatre lectures partent en PARALLÈLE : elles sont indépendantes, et
- * les enchaîner en séquence ajouterait trois aller-retours inutiles au
+ * Les cinq lectures partent en PARALLÈLE : elles sont indépendantes, et
+ * les enchaîner en séquence ajouterait quatre aller-retours inutiles au
  * temps de réponse (chacune touche Redis avant Postgres).
  *
- * Un seul sous-composant est un Client Component : ChatPanel (état de
- * conversation, saisie, appel réseau). Toutes les animations d'entrée
- * restent en CSS scroll-driven (classe .enter) sur le reste de la page.
+ * Deux sous-composants seulement sont des Client Components : ChatPanel
+ * et ContactForm (état, saisie, appel réseau). Toutes les animations
+ * d'entrée restent en CSS scroll-driven (classe .enter).
  */
 export default async function HomePage() {
-  const [profile, projects, experiences, skillGroups] = await Promise.all([
+  const [profile, projects, experiences, skillGroups, services] = await Promise.all([
     getPublicProfile(),
     getPublicProjects(),
     getPublicExperiences(),
     getPublicSkillsByCategory(),
+    getPublicServices(),
   ])
 
   if (!profile) notFound()
@@ -67,7 +70,7 @@ export default async function HomePage() {
       <Trajectory experiences={experiences} />
       <Ground groups={skillGroups} />
       <Dialogue suggestions={DIALOGUE_SUGGESTIONS} />
-      {/* 05 CONTACT : bloc suivant */}
+      <Contact email={profile.email} availability={profile.availability} services={services} />
     </main>
   )
 }

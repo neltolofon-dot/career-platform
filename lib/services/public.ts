@@ -123,3 +123,13 @@ export async function getPublicSkillsByCategory() {
 
   return Array.from(grouped, ([category, items]) => ({ category, items }))
 }
+
+export async function getPublicServices() {
+  return cached('services:active', 300, async () =>
+    prisma.service.findMany({
+      where: { active: true },
+      select: { slug: true, name: true, durationMin: true },
+      orderBy: { order: 'asc' },
+    }),
+  )
+}
