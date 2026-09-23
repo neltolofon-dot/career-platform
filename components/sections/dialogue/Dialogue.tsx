@@ -22,11 +22,11 @@ export function Dialogue({ suggestions }: { suggestions: string[] }) {
       anchor="2-9"
       className="enter"
     >
-      <h2 className="display display--section">Posez une question sur mon travail</h2>
+      <h2 className="display display--section">L’assistant répond sur mon travail</h2>
 
       <p className="prose-body" style={{ marginTop: 'var(--space-4)' }}>
-        Cet assistant répond uniquement à partir des données de ce site. Quand
-        l’information n’y est pas, il le dit — il n’invente pas.
+        Posez-lui une question. Il ne répond qu’à partir des données de ce
+        site, cite ses sources, et refuse quand l’information n’y est pas.
       </p>
 
       <ChatPanel suggestions={suggestions} />

@@ -19,12 +19,7 @@ function label(m: Msg): string {
 
 export function ChatMessage({ message: m }: { message: Msg }) {
   return (
-    <div
-      style={{
-        paddingBlock: 'var(--space-4)',
-        borderTop: 'var(--rule-width) solid var(--color-rule)',
-      }}
-    >
+    <div className="chat-msg">
       <span className="mono">{label(m)}</span>
       <p className="prose-body" style={{ marginTop: 'var(--space-2)' }}>
         {m.text}

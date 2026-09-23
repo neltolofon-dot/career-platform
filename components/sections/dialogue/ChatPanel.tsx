@@ -52,7 +52,7 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
   }
 
   return (
-    <div style={{ marginTop: 'var(--space-8)' }}>
+    <div className="chat-panel">
       {messages.length > 0 && (
         <div style={{ marginBottom: 'var(--space-6)' }}>
           {messages.map((m, i) => (
@@ -75,14 +75,14 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
         <input
           ref={inputRef}
           id="chat-input"
-          className="field__input"
+          className="field__input chat-panel__input"
           placeholder="Ex. : quels projets a-t-il menés en cybersécurité ?"
           maxLength={500}
           disabled={pending}
           style={{ width: '100%' }}
         />
         <button className="btn" type="submit" disabled={pending} style={{ marginTop: 'var(--space-4)' }}>
-          {pending ? 'Recherche…' : 'Demander'}
+          {pending ? <span className="chat-thinking">Recherche…</span> : 'Demander'}
         </button>
       </form>
 
@@ -92,9 +92,8 @@ export function ChatPanel({ suggestions }: { suggestions: string[] }) {
             <button
               key={s}
               type="button"
-              className="mono"
+              className="chat-suggestion"
               onClick={() => ask(s)}
-              style={{ background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }}
             >
               → {s}
             </button>
