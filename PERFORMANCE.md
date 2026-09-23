@@ -78,6 +78,22 @@ de plafond.
 demand »), `gemini-3.5-flash` répond en 22 s. Le modèle unique a été remplacé par une cascade
 de quatre modèles dans un budget de 45 s — voir ARCHITECTURE.md § IA.
 
+**Réponses tronquées — le raisonnement interne mangeait le budget de sortie.** En production,
+les réponses s'arrêtaient au milieu d'une phrase (« …a développé un »). Mesuré sur
+`gemini-3.5-flash`, même prompt, `maxOutputTokens: 400` :
+
+| Configuration | Durée | finishReason | Tokens de raisonnement | Tokens de réponse |
+|---|---|---|---|---|
+| défaut | 289 s | MAX_TOKENS | 381 | 15 (tronquée) |
+| `thinkingBudget: 0` | 47 s | STOP | 0 | 124 (complète) |
+| `thinkingLevel: MINIMAL` | 14 s | STOP | 0 | 124 (complète) |
+
+Par défaut, le modèle « réfléchit » avant de répondre et ces tokens comptent dans
+`maxOutputTokens` : 381 sur 400, il en restait 15 pour la réponse. Restituer un contexte fourni
+ne demande pas de raisonnement : `thinkingBudget: 0` (documenté « 0 is DISABLED » par le SDK)
+est retenu. Les écarts de durée entre variantes sont du bruit de surcharge (un échantillon
+chacune), pas une différence mesurée.
+
 ---
 
 ## Calibrage du seuil de pertinence

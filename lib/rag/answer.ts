@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI } from '@google/genai'
+import { GoogleGenAI } from '@google/genai'
 import { prisma } from '@/lib/prisma'
 import { hybridSearch, RELEVANCE_THRESHOLD, type Hit } from './search'
 
@@ -19,7 +19,22 @@ const CHAT_MODELS = [
 // maxDuration de la route = 60 s : il faut garder de la marge pour
 // l'embedding et la recherche hybride, faits AVANT la génération.
 const GENERATION_BUDGET_MS = 45_000
-const FALLBACK_STATUSES = new Set([429, 503])
+
+/**
+ * Statut HTTP d'une erreur Gemini, lu sans `instanceof ApiError` : le SDK
+ * peut être chargé deux fois (ESM et CJS) dans le bundle serveur, et
+ * l'instanceof échouerait alors en silence.
+ */
+function upstreamStatus(error: unknown): number | null {
+  const status = (error as { status?: unknown } | null)?.status
+  return typeof status === 'number' ? status : null
+}
+
+// 429 et 5xx = indisponibilité amont (surcharge, quota, panne côté Google).
+// 4xx = requête invalide de notre part : un défaut à corriger, pas à contourner.
+function isUpstreamUnavailable(status: number | null): boolean {
+  return status !== null && (status === 429 || status >= 500)
+}
 
 /** Tous les modèles ont échoué (503/429) ou le budget est épuisé. */
 export class ModelUnavailableError extends Error {
@@ -109,6 +124,12 @@ async function generateWithFallback(contents: string): Promise<string | undefine
           systemInstruction: SYSTEM_PROMPT,
           temperature: 0.2, // bas : on veut de la restitution, pas de la créativité
           maxOutputTokens: 400,
+          // Raisonnement interne désactivé. Mesuré sur gemini-3.5-flash : par
+          // défaut, 381 des 400 tokens partent en « thinking », la réponse
+          // est tronquée (finishReason MAX_TOKENS). Désactivé : 0 token de
+          // raisonnement, réponse complète. Restituer un contexte fourni ne
+          // demande pas de raisonner.
+          thinkingConfig: { thinkingBudget: 0 },
           // timeout = budget RESTANT, pas un budget par modèle. attempts: 1
           // désactive toute relance interne : sur 503 on bascule tout de
           // suite au modèle suivant au lieu d'attendre un backoff.
@@ -117,10 +138,10 @@ async function generateWithFallback(contents: string): Promise<string | undefine
       })
       return res.text
     } catch (error) {
-      const status = error instanceof ApiError ? error.status : null
+      const status = upstreamStatus(error)
       const budgetExhausted = Date.now() >= deadline
 
-      if (budgetExhausted || (status !== null && FALLBACK_STATUSES.has(status))) {
+      if (budgetExhausted || isUpstreamUnavailable(status)) {
         // Chaque bascule est journalisée : c'est la preuve que la cascade
         // a fonctionné en production, pas seulement en théorie.
         console.warn(
@@ -146,7 +167,20 @@ async function generateWithFallback(contents: string): Promise<string | undefine
 }
 
 export async function answerQuestion(question: string): Promise<Answer> {
-  const { hits, bestDistance } = await hybridSearch(question)
+  let search: Awaited<ReturnType<typeof hybridSearch>>
+  try {
+    search = await hybridSearch(question)
+  } catch (error) {
+    // L'embedding de la question passe AUSSI par Gemini, hors cascade :
+    // une panne amont à cette étape est une indisponibilité, pas un 500.
+    const status = upstreamStatus(error)
+    if (isUpstreamUnavailable(status)) {
+      console.warn(JSON.stringify({ level: 'warn', scope: 'chat.embedding', status }))
+      throw new ModelUnavailableError()
+    }
+    throw error
+  }
+  const { hits, bestDistance } = search
 
   /**
    * ┌────────────────────────────────────────────────────────────────┐
