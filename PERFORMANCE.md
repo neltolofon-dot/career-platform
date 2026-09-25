@@ -257,7 +257,12 @@ Production, profil mobile, pages déjà chauffées (réponse serveur ~115 ms), 2
 | `/travaux/koto-cosmetique` | 81 | 96 | 100 | 100 | 2.7 s | 3.4 s | 150 ms | 0 |
 
 L'accueil passe de 88 à 79 : le LCP monte de 1.7 s à 3.3 s avec l'arrivée du portrait en
-premier écran (préchargé, WebP optimisé par `next/image`), et le TBT de 330 à 440 ms. CLS
-nul sur les deux pages : `width`/`height` fixes et LQIP réservent l'espace des images.
+premier écran (préchargé, WebP optimisé par `next/image`), et le TBT de 330 à 440 ms. Le CLS
+à 0 de ce tableau ne vaut que pour ce passage unique. **Mesure corrigée le 25/09/2026** :
+onze passages Lighthouse mobile de l'accueil, en local, au commit `4b3e400` (juste avant le
+bloc 16) donnent **un CLS de 0,006** dans 8 passages sur 11 (0,005 à 0,006), et 0 dans les
+3 autres. Même valeur après le bloc 16 (0,006 à 0,007). La source est la rangée de boutons
+du premier écran, pas les images : `width`/`height` fixes et LQIP réservent bien leur espace.
+Détail dans `docs/DETTE.md`.
 L'accessibilité à 96 de la page projet vient d'une liste de définitions (`<dl>`) dont les
 libellés sont des `<span>` et non des `<dt>` — antérieur aux images, non corrigé.

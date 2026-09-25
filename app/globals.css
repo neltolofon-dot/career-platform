@@ -341,17 +341,6 @@ table, .tabular { font-variant-numeric: tabular-nums; }
    dans une colonne à DROITE du titre sur desktop (placement de grille). */
 .opening { display: grid; gap: var(--space-6); }
 
-.opening__portrait { width: 100%; max-width: 180px; }
-
-.opening__portrait img {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border: var(--rule-width) solid var(--color-rule);
-}
-
 @media (min-width: 64rem) {
   .opening {
     grid-template-columns: minmax(0, 1fr) 18rem;
@@ -359,7 +348,6 @@ table, .tabular { font-variant-numeric: tabular-nums; }
     align-items: start;
   }
   .opening__title    { grid-column: 1; grid-row: 1; }
-  .opening__portrait { grid-column: 2; grid-row: 1; max-width: none; }
 }
 
 /* Barre de navigation : nom raccourci sous 640 px, sinon il touche les numéros. */
@@ -854,22 +842,6 @@ body { background-image: none; }
 
 .opening__actions .btn { min-height: 3rem; text-decoration: none; }
 
-.opening__portrait {
-  width: min(72vw, 22rem);
-  margin: 0;
-}
-
-.opening__portrait img {
-  width: 100%;
-  border-color: rgba(96, 221, 0, 0.34);
-}
-
-.opening__portrait-caption {
-  display: block;
-  padding-top: var(--space-3);
-  text-align: right;
-}
-
 #ouverture .opening + dl {
   margin-top: var(--space-12) !important;
   padding-top: var(--space-6);
@@ -1181,8 +1153,6 @@ body { background-image: none; }
 
   .opening__copy { grid-column: 1; grid-row: 1; }
 
-  .opening__portrait { grid-column: 2; grid-row: 1; width: 100%; max-width: none; }
-
   .trajectory-entry { grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr); gap: var(--space-8); }
 
   .trajectory-entry__meta { align-content: start; flex-direction: column; }
@@ -1272,3 +1242,167 @@ body { background-image: none; }
 
   .site-footer__bottom { grid-column: 1 / -1; }
 }
+
+/* ===================================================================
+   BLOC 16 — COUCHE MOUVEMENT (docs/16-MOTION-PORTRAIT.md, D26/D27)
+   100 % natif : scroll-driven animations, @property, WAAPI.
+   Aucune dépendance. Tout s'éteint sous prefers-reduced-motion.
+   =================================================================== */
+
+@property --mx { syntax:'<percentage>'; inherits:false; initial-value:50%; }
+@property --my { syntax:'<percentage>'; inherits:false; initial-value:50%; }
+@property --glow { syntax:'<number>'; inherits:false; initial-value:0; }
+
+/* ---- 1. Barre de progression — zéro ligne de JS ---- */
+.progress {
+  position: fixed; inset: 0 0 auto; height: 2px; z-index: 90; pointer-events: none;
+}
+.progress__bar {
+  display: block;
+  height: 100%; transform-origin: 0 50%; transform: scaleX(var(--p, 0));
+  background: linear-gradient(90deg, var(--color-accent-dim), var(--color-vermilion));
+}
+@supports (animation-timeline: scroll()) {
+  .progress__bar {
+    transform: scaleX(0);
+    animation: progress-grow linear forwards;
+    animation-timeline: scroll(root block);
+  }
+  @keyframes progress-grow { to { transform: scaleX(1); } }
+}
+
+/* ---- 2. Verre liquide — reflet spéculaire suivant le pointeur ----
+   Sur fond sombre le reflet est blanc à faible opacité ; sur un aplat
+   vert il doit être plus soutenu pour rester perceptible.
+   `color` est repris dans la transition : sans lui, .lg écraserait celle
+   de .btn et le texte basculerait sans transition au survol. `translate`
+   sert l'aimantation posée par MotionLayer. */
+.lg { position: relative; overflow: hidden; isolation: isolate;
+      transition: transform var(--dur-state) var(--ease-out),
+                  background var(--dur-state) var(--ease-out),
+                  border-color var(--dur-state) var(--ease-out),
+                  color var(--dur-state) var(--ease-out),
+                  translate var(--dur-page) var(--ease-out); }
+.lg::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  pointer-events: none; opacity: var(--glow);
+  background: radial-gradient(130px circle at var(--mx) var(--my),
+              rgba(255,255,255,0.16), rgba(255,255,255,0) 62%);
+  transition: opacity var(--dur-state) ease-out;
+}
+.lg--accent::after {
+  background: radial-gradient(130px circle at var(--mx) var(--my),
+              rgba(255,255,255,0.40), rgba(255,255,255,0) 62%);
+}
+.lg:hover { --glow: 1; }
+.lg:active { transform: scale(0.97); transition-duration: var(--dur-micro); }
+
+/* ---- 3. Dock des six mouvements ----
+   Il reprend la numérotation 00–05 : même grammaire que les sections,
+   pas un composant de navigation importé d'ailleurs. */
+.dock {
+  position: fixed; left: 50%; bottom: 20px; z-index: 85;
+  display: flex; align-items: center; gap: 2px; padding: 5px;
+  border-radius: 999px; border: 1px solid var(--color-rule);
+  background: rgba(20, 20, 31, 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 22px 48px -30px #000;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-50%, 24px);
+  transition: opacity var(--dur-enter) var(--ease),
+              transform var(--dur-enter) var(--ease-out),
+              visibility var(--dur-enter);
+}
+.dock[data-on="true"] { opacity: 1; visibility: visible; pointer-events: auto;
+                        transform: translate(-50%, 0); }
+.dock[data-away="true"] { opacity: 0; pointer-events: none;
+                          transform: translate(-50%, 24px); }
+.dock__pill {
+  position: absolute; top: 5px; bottom: 5px; left: 0; width: 0; z-index: 0;
+  border-radius: 999px; background: var(--color-vermilion); opacity: 0;
+  transition: transform var(--dur-page) var(--ease-out),
+              width var(--dur-page) var(--ease-out), opacity var(--dur-state);
+}
+.dock__link {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 7px;
+  min-height: 36px; padding: 0 13px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-mono); text-transform: uppercase;
+  color: var(--color-ink-muted); white-space: nowrap;
+  transition: color var(--dur-state) var(--ease-out);
+}
+.dock__link[aria-current="true"] { color: #050505; font-weight: 600; }
+.dock__num { opacity: 0.6; font-variant-numeric: tabular-nums; }
+.dock__link[aria-current="true"] .dock__num { opacity: 0.75; }
+/* Pas de placement en haut sur desktop : la barre .site-nav y est déjà
+   collante et le dock recouvrait ses liens. */
+@media (max-width: 600px) { .dock__label { display: none; } .dock__link { padding: 0 11px; } }
+
+/* ---- 4. Portrait : disque sombre, liseré vert, parallaxe ----
+   La hauteur est FIXÉE en aspect-ratio : le décalage de mise en page
+   doit rester à zéro, c'est un chiffre qu'on annonce. */
+.portrait { position: relative; width: min(100%, 460px); aspect-ratio: 1 / 1.05;
+            margin-inline: auto; }
+.portrait::before {
+  content: ""; position: absolute; z-index: 0;
+  left: 2%; bottom: 0; width: 96%; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(102% 102% at 28% 16%,
+              var(--color-elevated) 0%, var(--color-surface) 58%, var(--color-paper) 100%);
+  border: 1px solid var(--color-accent-soft);
+  box-shadow: 0 40px 90px -50px rgba(96, 221, 0, 0.45);
+}
+.portrait::after {
+  content: ""; position: absolute; z-index: -1; inset: auto -6% -8% -6%; height: 70%;
+  background: radial-gradient(56% 50% at 50% 68%, rgba(96,221,0,0.16), transparent 72%);
+  filter: blur(26px); pointer-events: none;
+}
+.portrait__img {
+  position: absolute; z-index: 1; inset: -3% 5% 0 5%;
+  width: 90%; height: 103%;
+  object-fit: contain; object-position: bottom center;
+}
+/* Placement dans la grille de l'Ouverture : au-dessus du titre sur mobile
+   (ordre du DOM), colonne de droite sur desktop. */
+@media (min-width: 64rem) {
+  .opening .portrait { grid-column: 2; grid-row: 1; }
+}
+
+@supports (animation-timeline: view()) {
+  /* Deux vitesses = profondeur réelle, pas un effet plaqué. */
+  .portrait__img { animation: portrait-figure linear both;
+                   animation-timeline: view(block); animation-range: exit -5% exit 100%; }
+  .portrait::before { animation: portrait-disc linear both;
+                      animation-timeline: view(block); animation-range: exit -5% exit 100%; }
+  @keyframes portrait-figure { to { translate: 0 -52px; scale: 1.02; } }
+  @keyframes portrait-disc   { to { translate: 0 16px; scale: 0.9; opacity: 0.7; } }
+}
+
+/* ---- 5. Révélation des sections au défilement ----
+   Remplace l'entrée `.enter` par une animation pilotée par la position
+   RÉELLE dans la fenêtre, pas par un booléen d'IntersectionObserver.
+   `.enter` borne sa plage à `entry` (hauteur de fenêtre) et non à `cover`
+   (hauteur de l'élément) : une section de 3000 px restait floue pendant
+   qu'on lisait son titre. */
+@supports (animation-timeline: view()) {
+  .enter, .index-row {
+    animation: reveal-in linear both;
+    animation-timeline: view(block);
+    animation-range: entry 4% entry 50%;
+  }
+  .index-row { animation-range: entry 2% cover 20%; }
+  @keyframes reveal-in {
+    from { opacity: 0; translate: 0 30px; filter: blur(6px); }
+    to   { opacity: 1; translate: 0 0;   filter: blur(0); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__bar { animation: none !important; transform: scaleX(var(--p, 0)); }
+  .dock__pill { display: none; }
+  .lg::after { display: none; }
+  .lg:active { transform: none; }
+  .portrait__img, .portrait::before, .enter, .index-row { animation: none !important; }
+  .enter, .index-row { opacity: 1; translate: 0 0; filter: none; }
+}
+@media print { .progress, .dock { display: none !important; } }

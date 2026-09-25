@@ -1,10 +1,12 @@
 import Link from 'next/link'
 
+// Les libellés reprennent ceux des en-têtes de section, comme le dock :
+// la navigation dit ce que la page dit.
 const SECTIONS = [
   { id: 'travaux', n: '01', label: 'Travaux' },
-  { id: 'trajectoire', n: '02', label: 'Parcours' },
-  { id: 'terrain', n: '03', label: 'Expertise' },
-  { id: 'dialogue', n: '04', label: 'Assistant' },
+  { id: 'trajectoire', n: '02', label: 'Trajectoire' },
+  { id: 'terrain', n: '03', label: 'Terrain' },
+  { id: 'dialogue', n: '04', label: 'Dialogue' },
 ] as const
 
 export function SiteNav({ name }: { name: string }) {

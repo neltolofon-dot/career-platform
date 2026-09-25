@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: profile.fullName,
       description,
       type: 'profile',
-      images: [{ url: '/images/portrait.webp', width: 800, height: 1067, alt: profile.fullName }],
+      images: [{ url: '/portrait.webp', width: 1046, height: 1100, alt: profile.fullName }],
     },
   }
 }

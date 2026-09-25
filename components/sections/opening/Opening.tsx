@@ -48,16 +48,19 @@ export function Opening({
           </div>
         </div>
 
-        <figure className="opening__portrait">
+        {/* width/height = dimensions du FICHIER : avec l'aspect-ratio de
+            .portrait, ils gardent le CLS à zéro. `preload` et non `priority`,
+            déprécié depuis Next.js 16 ; c'est lui qui porte le LCP. */}
+        <figure className="portrait">
           <Image
-            src="/images/portrait.webp"
+            className="portrait__img"
+            src="/portrait.webp"
             alt="Suhrago Nelkaël Tolofon"
-            width={800}
-            height={1067}
+            width={1046}
+            height={1100}
             preload
-            sizes="(min-width: 64rem) 22rem, 72vw"
+            sizes="(min-width: 1024px) 460px, 90vw"
           />
-          <figcaption className="opening__portrait-caption mono">Cotonou · Bénin</figcaption>
         </figure>
       </div>
 

@@ -1,5 +1,37 @@
 # Personal Career Platform — contexte projet
 
+## Mise à jour du 25/09/2026 — prime sur les sections plus bas
+
+Ce fichier n'est pas réécrit : il reste la trace des règles du challenge. Là où il
+contredit ce qui suit, c'est ce qui suit qui s'applique.
+
+**Direction artistique.** La direction claire/éditoriale « Dossier technique » (encre sur
+papier, vermillon, Fraunces) a été **abandonnée** pour le **thème sombre NELTECH** (fond
+`#0A0A0F`, accent vert `#60DD00`, Geist). Les jetons font foi dans `app/globals.css`.
+La section « Direction artistique » plus bas et la décision D9 (« pas de dark mode ») sont
+donc caduques.
+
+**Interdictions levées** — elles tenaient à la direction morte : ombres (`box-shadow`),
+dégradés, flou d'arrière-plan (`backdrop-filter`), coins arrondis au-delà de 2 px.
+
+**Interdictions toujours en vigueur :**
+- pas de barre de progression ni de pourcentage sur les compétences ;
+- pas de cartes pour l'index des travaux : c'est une table (D15) ;
+- pas d'enchaînement de page Navbar / Hero / About / Skills / Projects.
+
+**Règle de l'accent, assouplie le 25/09/2026.** Ancienne règle : une seule occurrence
+visible de l'accent par écran. Nouvelle règle : **l'accent ne marque qu'une seule chose
+dans le CONTENU ; les éléments d'interface persistants — barre de progression, dock —
+n'entrent pas dans le compte.**
+Raison : le bloc 16 (`docs/16-MOTION-PORTRAIT.md`) ajoute deux éléments d'interface
+présents sur tous les écrans et colorés en accent, la barre de progression de lecture et
+la pastille du dock. Comptés, ils violeraient l'ancienne règle sur chaque écran. On a
+choisi de changer la règle plutôt que de l'enfreindre sans le dire. La barre de
+progression de lecture n'est pas concernée par l'interdiction sur les compétences
+ci-dessus : elle mesure la position dans la page, pas un niveau.
+
+---
+
 Challenge technique 24 h. Application SaaS personnelle full-stack, déployée sur Vercel,
 repo GitHub public, auditée par un jury. Le sujet complet et les décisions détaillées
 sont dans `docs/`.
